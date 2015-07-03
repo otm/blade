@@ -178,11 +178,10 @@ func printStatus(L *lua.LState) int {
 }
 
 type flags struct {
-	debug      bool
-	verbose    bool
-	quiet      bool
-	compgen    bool
-	compCWords int
+	debug       bool
+	genBashConf bool
+	compgen     bool
+	compCWords  int
 }
 
 var flg *flags
@@ -190,9 +189,8 @@ var flg *flags
 func init() {
 	flg = &flags{}
 	flag.BoolVar(&flg.debug, "debug", false, "Enable debug output")
-	flag.BoolVar(&flg.verbose, "verbose", false, "Enable verbose output")
-	flag.BoolVar(&flg.quiet, "quiet", false, "Quiet, do not output")
 	flag.BoolVar(&flg.compgen, "compgen", false, "Used for bash compleation")
+	flag.BoolVar(&flg.genBashConf, "generate-bash-conf", false, "Generate bash completion configuration")
 	flag.IntVar(&flg.compCWords, "comp-cwords", 0, "Used for bash compleation")
 }
 
@@ -223,6 +221,11 @@ func main() {
 	setupInterupt()
 
 	L, tbl, cmd := setupEnv()
+
+	if flg.genBashConf {
+		generateBashConfig()
+		return
+	}
 
 	if flg.compgen {
 		compgen(L, subcommands)

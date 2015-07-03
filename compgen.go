@@ -61,3 +61,19 @@ func compgen(L *lua.LState, subcommands targets) {
 	}
 
 }
+
+// blade -generate-bash-conf | sudo tee /etc/bash_completion.d/blade
+func generateBashConfig() {
+	conf := `_blade()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts=$(blade -compgen -comp-cwords $COMP_CWORD ${COMP_WORDS[@]})
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+complete -F _blade blade
+`
+	fmt.Print(conf)
+}
