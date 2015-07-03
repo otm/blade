@@ -1,40 +1,81 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/yuin/gopher-lua"
 )
+
+// LPrintHelp prints the help message
+var LPrintHelp *lua.LFunction
 
 func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	emit("Setting up environment\n")
 	L = lua.NewState()
 	defer L.Close()
 
+	LPrintHelp = L.NewFunction(printHelp)
+
 	emit("Setting up runner\n")
-	tbl := L.NewTable()
-	tbl.RawSetString("sh", L.NewFunction(Sh))
-	tbl.RawSetString("compgen", L.NewFunction(Compgen))
-	tbl.RawSetString("help", L.NewFunction(Help))
-	tbl.RawSetString("setup", L.NewFunction(func(L *lua.LState) int { return 0 }))
-	tbl.RawSetString("teardown", L.NewFunction(func(L *lua.LState) int { return 0 }))
-	tbl.RawSetString("default", L.NewFunction(printHelp))
-	L.SetGlobal("runner", tbl)
+	blade := L.NewTable()
+	blade.RawSetString("sh", L.NewFunction(func(L *lua.LState) int {
+		return Sh(L)
+	}))
+	blade.RawSetString("_sh", L.NewFunction(func(L *lua.LState) int {
+		return Sh(L, shNoEcho)
+	}))
+	blade.RawSetString("exec", L.NewFunction(func(L *lua.LState) int {
+		return Sh(L, shNoAbort)
+	}))
+	blade.RawSetString("_exec", L.NewFunction(func(L *lua.LState) int {
+		return Sh(L, shNoEcho, shNoAbort)
+	}))
+	blade.RawSetString("printStatus", L.NewFunction(printStatus))
+	blade.RawSetString("compgen", L.NewFunction(Compgen))
+	blade.RawSetString("help", L.NewFunction(Help))
+	blade.RawSetString("setup", L.NewFunction(func(L *lua.LState) int { return 0 }))
+	blade.RawSetString("teardown", L.NewFunction(func(L *lua.LState) int { return 0 }))
+	blade.RawSetString("default", LPrintHelp)
+
+	plugin := L.NewTable()
+	plugin.RawSetString("watch", L.NewFunction(watch))
+	blade.RawSetString("plugin", plugin)
+
+	L.SetGlobal("blade", blade)
 
 	emit("Setting up cmd\n")
 	cmds := L.NewTable()
-	L.SetGlobal("cmds", cmds)
+	L.SetGlobal("cmd", cmds)
+
+	filename := "make.lua"
+	for {
+		wd, _ := os.Getwd()
+		emit("Looking for blade file: %v", wd)
+		if _, err := os.Stat(filename); err == nil {
+			emit("Found blade file")
+			break
+		}
+
+		if wd == "/" {
+			fmt.Printf("fatal: No blade file (or in any parent directory): %v\n", filename)
+			os.Exit(1)
+		}
+
+		os.Chdir("..")
+	}
 
 	emit("Parsing blade file\n")
-	if err := L.DoFile("make.lua"); err != nil {
-		panic(err)
+	if err := L.DoFile(filename); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 
 	emit("Registring blade targets:\n")
 	cmds.ForEach(func(key, value lua.LValue) {
 		if f, ok := value.(*lua.LFunction); ok {
 			emit(" * %v [target]", key)
-			cmd := command{cmd: f}
+			cmd := target{cmd: f}
 			if c, ok := compgens[f]; ok {
 				emit(" * %v [compgen]", key)
 				cmd.compgen = c
@@ -47,7 +88,7 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 		}
 	})
 
-	return L, tbl, cmds
+	return L, blade, cmds
 }
 
 func setup(L *lua.LState, runner *lua.LTable) {
@@ -57,7 +98,8 @@ func setup(L *lua.LState, runner *lua.LTable) {
 		NRet:    1,
 		Protect: true,
 	}); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 	res := L.Get(-1)
 	L.Pop(1)
@@ -74,7 +116,8 @@ func teardown(L *lua.LState, runner *lua.LTable) {
 		NRet:    1,
 		Protect: true,
 	}); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 	res := L.Get(-1)
 	L.Pop(1)
@@ -92,7 +135,8 @@ func defaultTarget(L *lua.LState, runner *lua.LTable) bool {
 		NRet:    1,
 		Protect: true,
 	}); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 	res := L.Get(-1) // returned value
 	L.Pop(1)         // remove received value
@@ -107,11 +151,13 @@ func defaultTarget(L *lua.LState, runner *lua.LTable) bool {
 func customTarget(L *lua.LState, runner *lua.LTable, target string, args []string) bool {
 	emit("Looking up target: %v", target)
 	fn := runner.RawGetString(target)
-	if fn == nil {
+	if fn.Type() == lua.LTNil {
 		emit("Unable to find target: %v, aborting...", target)
 		return false
 	}
 	emit("Running target: %v", target)
+
+	currentTarget = target
 
 	var a []lua.LValue
 	for _, arg := range args {
@@ -123,7 +169,8 @@ func customTarget(L *lua.LState, runner *lua.LTable, target string, args []strin
 		NRet:    1,
 		Protect: true,
 	}, a...); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 	res := L.Get(-1) // returned value
 	L.Pop(1)         // remove received value

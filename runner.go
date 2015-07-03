@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
+	"strings"
 	"syscall"
+
+	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/yuin/gopher-lua"
 )
@@ -15,26 +21,9 @@ var (
 	debug = false
 )
 
-// Action executes a command
-func Action(L *lua.LState) int {
-	s := L.ToString(1)
-	fmt.Println("Action: ", s, " has been executed")
-
-	L.Push(lua.LTrue)
-	return 1
-}
-
 type compgenerator interface {
 	compgen(L *lua.LState, compWords []string, compCWords int) string
 }
-
-type command struct {
-	cmd     *lua.LFunction
-	help    string
-	compgen compgenerator
-}
-
-type commands map[string]command
 
 type funcCompgen struct {
 	f *lua.LFunction
@@ -50,10 +39,11 @@ func (sc *funcCompgen) compgen(L *lua.LState, compWords []string, compCWords int
 		NRet:    1,
 		Protect: true,
 	}, tbl, lua.LNumber(compCWords)); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 
-	ret := L.Get(-1) // returned value
+	ret := L.Get(-1)
 	L.Pop(1)
 
 	return ret.String()
@@ -67,7 +57,16 @@ func (sc *strCompgen) compgen(L *lua.LState, compWords []string, compCWords int)
 	return sc.s
 }
 
+type target struct {
+	cmd     *lua.LFunction
+	help    string
+	compgen compgenerator
+}
+
+type targets map[string]target
+
 var helps = make(map[*lua.LFunction]string)
+var compgens = make(map[*lua.LFunction]compgenerator)
 
 // Help registers help commands in lua
 func Help(L *lua.LState) int {
@@ -80,8 +79,6 @@ func Help(L *lua.LState) int {
 
 	return 0
 }
-
-var compgens = make(map[*lua.LFunction]compgenerator)
 
 // Compgen registers autocompletion help for sub commands
 func Compgen(L *lua.LState) int {
@@ -99,26 +96,85 @@ func Compgen(L *lua.LState) int {
 	return 0
 }
 
-// Sh runs a shell command
-func Sh(L *lua.LState) int {
+type shOpts struct {
+	noEcho  bool
+	noAbort bool
+}
 
-	cmd := exec.Command("bash", "-c", L.ToString(1))
-	cmd.Stdout = os.Stdout
+func shNoEcho(opts *shOpts) {
+	opts.noEcho = true
+}
+
+func shNoAbort(opts *shOpts) {
+	opts.noAbort = true
+}
+
+// Sh runs a shell command
+func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
+	b := new(bytes.Buffer)
+	opts := &shOpts{}
+	for _, option := range options {
+		option(opts)
+	}
+
+	shell := "bash"
+	cmd := exec.Command(shell, "-c", L.ToString(1))
+	cmd.Stdout = io.MultiWriter(b, os.Stdout)
 	cmd.Stderr = os.Stderr
+	if !opts.noEcho {
+		fmt.Printf("%v\n", L.ToString(1))
+	}
 	err := cmd.Run()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				fmt.Printf("Error running command: Exit Status: %d\n", status.ExitStatus())
-				L.Push(lua.LFalse)
-				L.Push(lua.LNumber(status.ExitStatus()))
-				return 2
+				if opts.noAbort {
+					L.Push(lua.LNumber(status.ExitStatus()))
+					L.Push(lua.LString(b.String()))
+					return 2
+				}
+
+				L.Error(lua.LString(fmt.Sprintf("blade: Target: [%v] Error: %v", currentTarget, status.ExitStatus())), 0)
+				os.Exit(1)
 			}
 		}
 	}
-	L.Push(lua.LTrue)
 	L.Push(lua.LNumber(0))
+	L.Push(lua.LString(b.String()))
 	return 2
+}
+
+func printStatus(L *lua.LState) int {
+	w, _, err := terminal.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		emit("Unable to get terminal size: %v", err)
+		return 0
+	}
+	reset := "\033[0m"
+	red := "\033[31m"
+	green := "\033[32m"
+	blue := "\033[34m"
+
+	status := fmt.Sprintf("[%vudef%v]", blue, reset)
+	ok := fmt.Sprintf("[ %vok%v ]", green, reset)
+	fail := fmt.Sprintf("[%vfail%v]", red, reset)
+	switch L.Get(2).Type() {
+	case lua.LTBool:
+		status = fail
+		if L.ToBool(2) {
+			status = ok
+		}
+	case lua.LTNumber:
+		status = fail
+		if L.ToInt(2) == 0 {
+			status = ok
+		}
+	}
+
+	message := L.ToString(1)
+	fmt.Printf("%v%v%v\n", message, strings.Repeat(" ", w-len(message)-len(status)+len(reset)+len(red)-1), status)
+
+	return 0
 }
 
 type flags struct {
@@ -131,14 +187,8 @@ type flags struct {
 
 var flg *flags
 
-// TODO (nils): A better flag parser is needed to handle git like cases
-// examples:
-// blade install -v
-// blade test -system
-// blade test -unit
 func init() {
 	flg = &flags{}
-	//flag.Usage = usage
 	flag.BoolVar(&flg.debug, "debug", false, "Enable debug output")
 	flag.BoolVar(&flg.verbose, "verbose", false, "Enable verbose output")
 	flag.BoolVar(&flg.quiet, "quiet", false, "Quiet, do not output")
@@ -146,16 +196,31 @@ func init() {
 	flag.IntVar(&flg.compCWords, "comp-cwords", 0, "Used for bash compleation")
 }
 
-/*
-func usage() {
-	fmt.Println("Some usage info")
-}
-*/
+var subcommands = make(targets)
+var done chan struct{}
+var cleanup = make(chan func(), 10)
+var currentTarget string
 
-var subcommands = make(commands)
+func setupInterupt() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		sig := <-c
+		emit("Received: %v", sig)
+		if done != nil {
+			emit("Signaling shutdown")
+			done <- struct{}{}
+		} else {
+			fmt.Fprintf(os.Stderr, "aborting: due to %v signal", sig)
+		}
+	}()
+}
 
 func main() {
 	flag.Parse()
+	defer clean()
+
+	setupInterupt()
 
 	L, tbl, cmd := setupEnv()
 
@@ -165,7 +230,7 @@ func main() {
 	}
 
 	if flag.Arg(0) == "help" {
-		printHelp(nil)
+		printHelp(L)
 		return
 	}
 
@@ -179,7 +244,25 @@ func main() {
 
 	if flag.NArg() > 0 {
 		customTarget(L, cmd, flag.Arg(0), flag.Args()[1:])
+		if done != nil {
+			emit("Waiting for done signal")
+			<-done
+		}
 		return
+	}
+}
+
+func clean() {
+	for {
+		var fn func()
+		select {
+		case fn = <-cleanup:
+			emit("Running cleanup function")
+			fn()
+		default:
+			emit("All cleaned up")
+			return
+		}
 	}
 }
 

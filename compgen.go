@@ -24,7 +24,7 @@ func printFlags() {
 	fmt.Printf("%v", strings.Join(s, " "))
 }
 
-func compgen(L *lua.LState, subcommands commands) {
+func compgen(L *lua.LState, subcommands targets) {
 	// create and shift of the program name
 	args := flag.Args()
 	args = shift(args)
