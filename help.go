@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/yuin/gopher-lua"
@@ -25,8 +26,16 @@ func printHelp(L *lua.LState) int {
 		}
 	}
 
-	for target, cmd := range subcommands {
-		fmt.Printf("  %v: %v\n", target, strings.Trim(cmd.help, "\n"))
+	keys := make([]string, len(subcommands))
+	i := 0
+	for target := range subcommands {
+		keys[i] = target
+		i++
 	}
+	sort.Strings(keys)
+	for _, target := range keys {
+		fmt.Printf("  %v: %v\n", target, strings.Trim(subcommands[target].help, "\n"))
+	}
+
 	return 0
 }

@@ -5,11 +5,8 @@ function target.release(version, name, description)
 		return
 	end
 
-	_name = string.format("blade %s", version)
-	_description = string.format("blade %s", version)
-	name = name or _name
-	description = description or _description
-
+	name = name or string.format("blade %s", version)
+	description = description or string.format("blade %s", version)
 
 	if not string.match(version, "^v%d[.]%d[.]%d$") then
 		print("fatal: version must be on the form 'vX.X.X'")
@@ -35,13 +32,17 @@ function target.release(version, name, description)
 	end
 end
 
-blade.help(target.release, "<version> [name] [description]")
+blade.help(target.release, "<version> [name] [description] - cross compile and create release on Github")
 
 
 function target.clean()
 	blade.sh("rm blade_*")
 end
 
+blade.help(target.clean, " - clean working directory of builds")
+
 function target.build()
 	blade.sh("gox")
 end
+
+blade.help(target.build, " - cross compile")
