@@ -20,7 +20,7 @@ go install github.com/otm/blade
 ```
 
 Pre built binaries can be downloaded at
-https://github.com/otm/atomdeb/releases/latest
+https://github.com/otm/blade/releases/latest
 
 ## Bash Completion
 The -generate-bash-conf option outputs the bash completion configuration to stdout. Either manually copy it or you can for instance use `tee`:
