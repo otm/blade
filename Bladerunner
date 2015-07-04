@@ -14,7 +14,7 @@ function blade.default()
 end
 
 function cmd.watch()
-	blade.plugin.watch{callback=notExported, dir="test", recursive=true, filter="*.go"}
+	blade.plugin.watch{callback=notExported, dir="test", recursive=true, filter="*.go", exclude={"projects", "project"}}
 end
 
 function notExported(file, op)

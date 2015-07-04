@@ -254,8 +254,16 @@ end)
 
 ## Plugins
 
-### blade.plugin.watch{callback, dir}
+### blade.plugin.watch{callback, dir, recursive, filter, exclude}
 blade have a built-in simple file watcher.
+
+* ***callback - function(file, op):*** function for processing file events
+* ***dir - string:*** the directory to watch
+* ***recursive - bool:*** watch sub directories recursively
+* ***filter - string:*** files matching regexp will be sent processed
+* ***exclude - {string, ...}:*** a table of strings of directories to exclude
+
+***Note:*** Several watch statements can be specified in one target
 
 ``` lua
 function cmd.watch()
