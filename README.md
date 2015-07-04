@@ -272,6 +272,6 @@ This section contains some Lua tips for new users
 
 * Define strings: `"str"`, `'str'` or `[[str]]`
 * Read environment variables: `os.getenv("HOME")`
-* if-else: if <statement> then <code> elseif <statement> then <code> else <code> end
-* named function variables: fn{key=name, ...}
-* equivalent: arg = {key=name, ...}; fn(arg)
+* if-else: `if <statement> then <code> elseif <statement> then <code> else <code> end`
+* named function variables: `fn{key=name, ...}`
+* equivalent: `arg = {key=name, ...}; fn(arg)`
