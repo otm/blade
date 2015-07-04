@@ -159,7 +159,7 @@ print(sh)
 -- prints 'zsh'
 ```
 
-### blade.sh(command) => exitStatus, stdout
+### blade.sh(command) => exitStatus, stdout, stderr
 Run arbitrary shell commands, executed in bash by default. If the command returns a non zero exit code the target execution will be aborted. The command is echoed to stdout, to suppress this use `blade._sh` instead.
 
 Returns the exit status and the standard output from the command
@@ -176,16 +176,30 @@ exitStatus, out = blade._sh("echo 'Hello World'")
 -- Helo World
 ```
 
-### blade.exec(command) => exitStatus, stdout
-`runner.exec`, does not abort target execution if the command returns a non zero exit code.
+### blade.exec(command) => exitStatus, stdout, stderr
+`runner.exec`, does not abort target execution if the command returns a non zero exit code. `runner._exec` will suppress the command echo to stdout.
 
 ***Example:***
 ``` lua
 blade.exec("false'")
 print("command execution continues")
 
+blade._exec("false")
+print("commnd is not echoed to stdout, execution continues")
+
 blade.sh("false")
 print("This is not executed")
+```
+
+### blade.system(command) => exitStatus, stdout, stderr
+Like `blade.sh` but does not check anything, or echo anything.
+
+***Example:***
+``` lua
+code, out, err = blade.system("echo 'Hello World' && date -r")
+print("code:", code)
+print("stdout:", out)
+print("stderr", err)
 ```
 
 ### blade.printStatus(message, status)

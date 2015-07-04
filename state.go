@@ -31,6 +31,9 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	blade.RawSetString("_exec", L.NewFunction(func(L *lua.LState) int {
 		return Sh(L, shNoEcho, shNoAbort)
 	}))
+	blade.RawSetString("system", L.NewFunction(func(L *lua.LState) int {
+		return Sh(L, shNoEcho, shNoAbort, shNoStdout)
+	}))
 	blade.RawSetString("shell", L.NewFunction(SetShell))
 	blade.RawSetString("printStatus", L.NewFunction(printStatus))
 	blade.RawSetString("compgen", L.NewFunction(Compgen))

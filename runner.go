@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -99,6 +100,7 @@ func Compgen(L *lua.LState) int {
 type shOpts struct {
 	noEcho  bool
 	noAbort bool
+	stdout  io.Writer
 }
 
 func shNoEcho(opts *shOpts) {
@@ -107,6 +109,10 @@ func shNoEcho(opts *shOpts) {
 
 func shNoAbort(opts *shOpts) {
 	opts.noAbort = true
+}
+
+func shNoStdout(opts *shOpts) {
+	opts.stdout = ioutil.Discard
 }
 
 // SetShell sets/returns the current shell
@@ -120,15 +126,16 @@ var shell = "bash"
 
 // Sh runs a shell command
 func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
-	b := new(bytes.Buffer)
-	opts := &shOpts{}
+	stdoutBuf := new(bytes.Buffer)
+	stderrBuf := new(bytes.Buffer)
+	opts := &shOpts{stdout: os.Stdout}
 	for _, option := range options {
 		option(opts)
 	}
 
 	cmd := exec.Command(shell, "-c", L.ToString(1))
-	cmd.Stdout = io.MultiWriter(b, os.Stdout)
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = io.MultiWriter(stdoutBuf, opts.stdout)
+	cmd.Stderr = io.MultiWriter(stderrBuf, os.Stderr)
 	if !opts.noEcho {
 		fmt.Printf("%v\n", L.ToString(1))
 	}
@@ -138,8 +145,9 @@ func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 				if opts.noAbort {
 					L.Push(lua.LNumber(status.ExitStatus()))
-					L.Push(lua.LString(b.String()))
-					return 2
+					L.Push(lua.LString(stdoutBuf.String()))
+					L.Push(lua.LString(stderrBuf.String()))
+					return 3
 				}
 
 				L.Error(lua.LString(fmt.Sprintf("blade: Target: [%v] Error: %v", currentTarget, status.ExitStatus())), 0)
@@ -148,8 +156,9 @@ func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
 		}
 	}
 	L.Push(lua.LNumber(0))
-	L.Push(lua.LString(b.String()))
-	return 2
+	L.Push(lua.LString(stdoutBuf.String()))
+	L.Push(lua.LString(stderrBuf.String()))
+	return 3
 }
 
 func printStatus(L *lua.LState) int {

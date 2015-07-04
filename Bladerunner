@@ -1,78 +1,47 @@
 
-function blade.setup()
-	print("setup")
+function target.release(version, name, description)
+	if version == nil then
+		print("fatal: no version specified")
+		return
+	end
+
+	_name = string.format("blade %s", version)
+	_description = string.format("blade %s", version)
+	name = name or _name
+	description = description or _description
+
+
+	if not string.match(version, "^v%d[.]%d[.]%d$") then
+		print("fatal: version must be on the form 'vX.X.X'")
+		return
+	end
+
+	exitCode, output = blade._exec('git status --porcelain')
+	if output ~= "" then
+		print("fatal: uncommited changes")
+		return
+	end
+
+	target.build()
+	blade.sh('git tag ' .. version)
+	blade.sh('git push --tags')
+
+	runner.sh(string.format("github-release release --user otm --repo blade --tag %s --name '%s' --description '%s'", version, name, description))
+
+	code, out = blade.system("ls -1 blade_*")
+	for file in out:gmatch"(.-)\n" do
+		code = runner.system(string.format("github-release upload --user otm --repo blade --tag %s --name %s --file %s", version, file, file))
+		blade.printStatus(file, code)
+	end
 end
 
-function blade.teardown()
-	print("teardown")
+blade.help(target.release, "<version> [name] [description]")
+
+
+function target.clean()
+	blade.sh("rm blade_*")
 end
 
-function blade.default()
-	print("======= default =======")
-	print("ENV: ", os.getenv("HOME"))
-	print("=======================")
+function target.build()
+	blade.sh("gox")
 end
-
-function cmd.watch()
-	blade.plugin.watch{callback=notExported, dir="test", recursive=true, filter="*.go", exclude={"projects", "project"}}
-end
-
-function notExported(file, op)
-  print("Handle watched call: " .. file .. " (" .. op .. ")")
-end
-
-function target.hello(use)
-	use = use or "lua"
-
-  if use == "shell" then
-		blade.sh([[echo "hello world"]])
-  elseif use == "lua" then
-    print("hello world")
-  else
-    print("unknown option: " .. use)
-  end
-end
-
-function cmd.test(...)
-  -- Running lua code
-  -- This shows how to handle arguments from the command line
-  print("Number of inputs: ", arg.n)
-  for k, v in ipairs(arg) do
-    print(k, "=", v)
-  end
-
-  -- output command status
-  blade.printStatus("true", true)
-  blade.printStatus("false", false)
-  blade.printStatus("0", 0)
-  blade.printStatus("1", 1)
-  blade.printStatus("nil")
-	blade.printStatus("true (shell)", blade._exec("true"))
-	blade.printStatus("false (shell)", blade._exec("false"))
-
-
-  -- capture exit status and command output
-  exitStatus, out = blade.sh("echo 'Blade runner'")
-  print("Exit: " .. exitStatus .. ", Output: ".. out)
-
-  -- no echo of running command
-  blade._sh("echo 'no cmd echo'")
-
-  -- do not break on command error
-  blade.exec("false")
-
-  -- automaticly break on errors
-	blade.sh("date -r")
-
-  -- this statement is unreachable due to error on previus statement
-  blade.sh([[echo "this should not run"]])
-end
-
-blade.compgen(cmd.test, function(compWords, compCWords)
-  if compCWords == 1 then
-	   return "unit system"
-   end
-   return ""
-end)
-
-blade.help(cmd.test, "<unit|system>")
