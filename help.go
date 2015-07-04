@@ -15,17 +15,15 @@ func printHelp(L *lua.LState) int {
 	flag.PrintDefaults()
 	fmt.Printf("\nTargets:\n")
 
-	// Check if the default function has been changed
-	if blade, ok := L.GetGlobal("blade").(*lua.LTable); ok {
-		if defaultTarget, ok := blade.RawGetString("default").(*lua.LFunction); ok && defaultTarget != LPrintHelp {
-			defaultHelp := ""
-			if h, ok := helps[defaultTarget]; ok {
-				defaultHelp = h
-			}
-			fmt.Printf("  <default>: %v\n", strings.Trim(defaultHelp, "\n"))
+	// transform pretty prints the default key = "" (empty string)
+	transform := func(s string) string {
+		if s == "" {
+			return "<default>"
 		}
+		return s
 	}
 
+	// Sort and print targets
 	keys := make([]string, len(subcommands))
 	i := 0
 	for target := range subcommands {
@@ -34,7 +32,7 @@ func printHelp(L *lua.LState) int {
 	}
 	sort.Strings(keys)
 	for _, target := range keys {
-		fmt.Printf("  %v: %v\n", target, strings.Trim(subcommands[target].help, "\n"))
+		fmt.Printf("  %v: %v\n", transform(target), strings.Trim(subcommands[target].help, "\n"))
 	}
 
 	return 0

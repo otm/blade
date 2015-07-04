@@ -1,197 +1,105 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
-	"syscall"
-
-	"golang.org/x/crypto/ssh/terminal"
+	"strconv"
 
 	"github.com/yuin/gopher-lua"
 )
 
 var (
-	debug = false
+	// shell contains the current shell used when running shell commands
+	shell = "bash"
+
+	// TODO (nils): Create subcommands in Help and Compgen function if needed
+	// and error if no target is bound to them efter control returns to Go
+
+	// helps contans the custom help messages for the targets
+	// this is only used after running the Bladerunner file
+	// the reason is that when the Lua script runs the help
+	// function is called, and we do not yet now if the target exists
+	//helps = make(map[*lua.LFunction]string)
+
+	// comgens contains custom helpers for generating bash compleation opts
+	// this is also a temporary function as we do not now if the Lua function
+	// is a target when the function is run
+	//compgens = make(map[*lua.LFunction]compgenerator)
+
+	// flg contains all flags from the command line
+	flg *flags
+
+	// subcommands are the targets defiend in Lua
+	subcommands = make(targets)
+
+	// done is used for signaling that we should abort the blade target execution
+	// and quit
+	done chan struct{}
+
+	// cleanup is used by go routines to receive notification that blade is shutting
+	// down so they can clean up and shutdown
+	cleanup = make(chan func(), 10)
+
+	// currentTarget is the name of the curret running target
+	// This is used when generating error messages for fatal errors when running
+	// targets.
+	currentTarget string
 )
-
-type compgenerator interface {
-	compgen(L *lua.LState, compWords []string, compCWords int) string
-}
-
-type funcCompgen struct {
-	f *lua.LFunction
-}
-
-func (sc *funcCompgen) compgen(L *lua.LState, compWords []string, compCWords int) string {
-	tbl := L.NewTable()
-	for _, v := range compWords {
-		tbl.Append(lua.LString(v))
-	}
-	if err := L.CallByParam(lua.P{
-		Fn:      sc.f,
-		NRet:    1,
-		Protect: true,
-	}, tbl, lua.LNumber(compCWords)); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
-	ret := L.Get(-1)
-	L.Pop(1)
-
-	return ret.String()
-}
-
-type strCompgen struct {
-	s string
-}
-
-func (sc *strCompgen) compgen(L *lua.LState, compWords []string, compCWords int) string {
-	return sc.s
-}
 
 type target struct {
 	cmd     *lua.LFunction
 	help    string
 	compgen compgenerator
+	valid   bool
 }
 
-type targets map[string]target
+type targets map[string]*target
 
-var helps = make(map[*lua.LFunction]string)
-var compgens = make(map[*lua.LFunction]compgenerator)
-
-// Help registers help commands in lua
-func Help(L *lua.LState) int {
-	targetFunc := L.CheckFunction(1)
-	if v := L.ToString(2); v != "" {
-		helps[targetFunc] = v
-	} else {
-		L.TypeError(2, lua.LTString)
-	}
-
-	return 0
-}
-
-// Compgen registers autocompletion help for sub commands
-func Compgen(L *lua.LState) int {
-	targetFunc := L.CheckFunction(1)
-	if v := L.ToFunction(2); v != nil {
-		var c compgenerator = &funcCompgen{f: v}
-		compgens[targetFunc] = c
-	} else if v := L.ToString(2); v != "" {
-		var c compgenerator = &strCompgen{s: v}
-		compgens[targetFunc] = c
-	} else {
-		L.TypeError(2, lua.LTString)
-	}
-
-	return 0
-}
-
-type shOpts struct {
-	noEcho  bool
-	noAbort bool
-	stdout  io.Writer
-}
-
-func shNoEcho(opts *shOpts) {
-	opts.noEcho = true
-}
-
-func shNoAbort(opts *shOpts) {
-	opts.noAbort = true
-}
-
-func shNoStdout(opts *shOpts) {
-	opts.stdout = ioutil.Discard
-}
-
-// SetShell sets/returns the current shell
-func SetShell(L *lua.LState) int {
-	shell = L.CheckString(1)
-	L.Push(lua.LString(shell))
-	return 1
-}
-
-var shell = "bash"
-
-// Sh runs a shell command
-func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
-	stdoutBuf := new(bytes.Buffer)
-	stderrBuf := new(bytes.Buffer)
-	opts := &shOpts{stdout: os.Stdout}
-	for _, option := range options {
-		option(opts)
-	}
-
-	cmd := exec.Command(shell, "-c", L.ToString(1))
-	cmd.Stdout = io.MultiWriter(stdoutBuf, opts.stdout)
-	cmd.Stderr = io.MultiWriter(stderrBuf, os.Stderr)
-	if !opts.noEcho {
-		fmt.Printf("%v\n", L.ToString(1))
-	}
-	err := cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				if opts.noAbort {
-					L.Push(lua.LNumber(status.ExitStatus()))
-					L.Push(lua.LString(stdoutBuf.String()))
-					L.Push(lua.LString(stderrBuf.String()))
-					return 3
-				}
-
-				L.Error(lua.LString(fmt.Sprintf("blade: Target: [%v] Error: %v", currentTarget, status.ExitStatus())), 0)
-				os.Exit(1)
-			}
-		}
-	}
-	L.Push(lua.LNumber(0))
-	L.Push(lua.LString(stdoutBuf.String()))
-	L.Push(lua.LString(stderrBuf.String()))
-	return 3
-}
-
-func printStatus(L *lua.LState) int {
-	w, _, err := terminal.GetSize(int(os.Stdout.Fd()))
-	if err != nil {
-		emit("Unable to get terminal size: %v", err)
-		return 0
-	}
-	reset := "\033[0m"
-	red := "\033[31m"
-	green := "\033[32m"
-	blue := "\033[34m"
-
-	status := fmt.Sprintf("[%vudef%v]", blue, reset)
-	ok := fmt.Sprintf("[ %vok%v ]", green, reset)
-	fail := fmt.Sprintf("[%vfail%v]", red, reset)
-	switch L.Get(2).Type() {
-	case lua.LTBool:
-		status = fail
-		if L.ToBool(2) {
-			status = ok
-		}
-	case lua.LTNumber:
-		status = fail
-		if L.ToInt(2) == 0 {
-			status = ok
+func (t targets) get(fn *lua.LFunction) (subcmd *target, name string) {
+	for name, subcmd := range t {
+		if subcmd.cmd == fn {
+			return subcmd, name
 		}
 	}
 
-	message := L.ToString(1)
-	fmt.Printf("%v%v%v\n", message, strings.Repeat(" ", w-len(message)-len(status)+len(reset)+len(red)-1), status)
+	subcmd = &target{cmd: fn}
+	name = "tmp-dummy-" + strconv.Itoa(len(t))
+	t[name] = subcmd
+	return subcmd, name
+}
 
-	return 0
+func (t targets) rename(from, to string) error {
+	if _, ok := t[from]; !ok {
+		return fmt.Errorf("Target not found: %v", from)
+	}
+
+	t[to] = t[from]
+	delete(t, from)
+	t[to].valid = true
+	return nil
+}
+
+func (t targets) validate() {
+	for _, subcmd := range t {
+		if !subcmd.valid {
+			fmt.Fprintf(os.Stderr, "fatal: no command bound to target\n")
+			fmt.Fprintf(os.Stderr, "fatal: check blade.help and blade.compgen calls\n")
+			fmt.Fprintf(os.Stderr, "debug: the following functions are ok:\n")
+			t.printValidTargets()
+			os.Exit(1)
+		}
+	}
+}
+
+func (t targets) printValidTargets() {
+	for name, subcmd := range t {
+		if subcmd.valid {
+			fmt.Fprintf(os.Stderr, "debug:  * %v\n", name)
+		}
+	}
 }
 
 type flags struct {
@@ -201,8 +109,6 @@ type flags struct {
 	compCWords  int
 }
 
-var flg *flags
-
 func init() {
 	flg = &flags{}
 	flag.BoolVar(&flg.debug, "debug", false, "Enable debug output")
@@ -211,14 +117,12 @@ func init() {
 	flag.IntVar(&flg.compCWords, "comp-cwords", 0, "Used for bash compleation")
 }
 
-var subcommands = make(targets)
-var done chan struct{}
-var cleanup = make(chan func(), 10)
-var currentTarget string
-
+// setupInterupt is used for catching ctrl-c when we want to abort the current
+// running target.
 func setupInterupt() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
+
 	go func() {
 		sig := <-c
 		emit("Received: %v", sig)
@@ -272,6 +176,7 @@ func main() {
 	}
 }
 
+// clean is used for signals registered go routins that they should shutdown
 func clean() {
 	for {
 		var fn func()

@@ -15,25 +15,19 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	L = lua.NewState()
 	defer L.Close()
 
+	// TODO (nils): Remove LPrintHelp and set the default function to lua.LNil
 	LPrintHelp = L.NewFunction(printHelp)
 
 	emit("Setting up runner\n")
+	plugin := L.NewTable()
+	plugin.RawSetString("watch", L.NewFunction(watch))
+
 	blade := L.NewTable()
-	blade.RawSetString("sh", L.NewFunction(func(L *lua.LState) int {
-		return Sh(L)
-	}))
-	blade.RawSetString("_sh", L.NewFunction(func(L *lua.LState) int {
-		return Sh(L, shNoEcho)
-	}))
-	blade.RawSetString("exec", L.NewFunction(func(L *lua.LState) int {
-		return Sh(L, shNoAbort)
-	}))
-	blade.RawSetString("_exec", L.NewFunction(func(L *lua.LState) int {
-		return Sh(L, shNoEcho, shNoAbort)
-	}))
-	blade.RawSetString("system", L.NewFunction(func(L *lua.LState) int {
-		return Sh(L, shNoEcho, shNoAbort, shNoStdout)
-	}))
+	blade.RawSetString("sh", L.NewFunction(func(L *lua.LState) int { return Sh(L) }))
+	blade.RawSetString("_sh", L.NewFunction(func(L *lua.LState) int { return Sh(L, shNoEcho) }))
+	blade.RawSetString("exec", L.NewFunction(func(L *lua.LState) int { return Sh(L, shNoAbort) }))
+	blade.RawSetString("_exec", L.NewFunction(func(L *lua.LState) int { return Sh(L, shNoEcho, shNoAbort) }))
+	blade.RawSetString("system", L.NewFunction(func(L *lua.LState) int { return Sh(L, shNoEcho, shNoAbort, shNoStdout) }))
 	blade.RawSetString("shell", L.NewFunction(SetShell))
 	blade.RawSetString("printStatus", L.NewFunction(printStatus))
 	blade.RawSetString("compgen", L.NewFunction(Compgen))
@@ -41,17 +35,15 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	blade.RawSetString("setup", L.NewFunction(func(L *lua.LState) int { return 0 }))
 	blade.RawSetString("teardown", L.NewFunction(func(L *lua.LState) int { return 0 }))
 	blade.RawSetString("default", LPrintHelp)
-	L.SetGlobal("blade", blade)
-
-	plugin := L.NewTable()
-	plugin.RawSetString("watch", L.NewFunction(watch))
 	blade.RawSetString("plugin", plugin)
+	L.SetGlobal("blade", blade)
 
 	emit("Setting up cmd\n")
 	cmds := L.NewTable()
 	L.SetGlobal("cmd", cmds)
 	L.SetGlobal("target", cmds)
 
+	// Search for Bladerunner file
 	filename := "Bladerunner"
 	for {
 		wd, _ := os.Getwd()
@@ -77,24 +69,18 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 
 	emit("Registring blade targets:\n")
 	cmds.ForEach(func(key, value lua.LValue) {
-		if f, ok := value.(*lua.LFunction); ok {
+		if f, ok := value.(*lua.LFunction); !ok {
 			emit(" * %v [target]", key)
-			cmd := target{cmd: f}
-			if c, ok := compgens[f]; ok {
-				emit(" * %v [compgen]", key)
-				cmd.compgen = c
-			}
-			if h, ok := helps[f]; ok {
-				emit(" * %v [help]", key)
-				cmd.help = h
-			}
-			subcommands[key.String()] = cmd
+			_, name := subcommands.get(f)
+			subcommands.rename(name, key.String())
 		}
 	})
+	subcommands.validate()
 
 	return L, blade, cmds
 }
 
+// TODO (nils): rewrite these function
 func setup(L *lua.LState, runner *lua.LTable) {
 	emit("Running blade setup")
 	if err := L.CallByParam(lua.P{

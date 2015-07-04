@@ -3,10 +3,47 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/yuin/gopher-lua"
 )
+
+type compgenerator interface {
+	compgen(L *lua.LState, compWords []string, compCWords int) string
+}
+
+type funcCompgen struct {
+	f *lua.LFunction
+}
+
+func (sc *funcCompgen) compgen(L *lua.LState, compWords []string, compCWords int) string {
+	tbl := L.NewTable()
+	for _, v := range compWords {
+		tbl.Append(lua.LString(v))
+	}
+	if err := L.CallByParam(lua.P{
+		Fn:      sc.f,
+		NRet:    1,
+		Protect: true,
+	}, tbl, lua.LNumber(compCWords)); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	ret := L.Get(-1)
+	L.Pop(1)
+
+	return ret.String()
+}
+
+type strCompgen struct {
+	s string
+}
+
+func (sc *strCompgen) compgen(L *lua.LState, compWords []string, compCWords int) string {
+	return sc.s
+}
 
 func shift(slice []string) []string {
 	if len(slice) > 1 {
@@ -48,6 +85,9 @@ func compgen(L *lua.LState, subcommands targets) {
 	if flg.compCWords == index {
 		var s []string
 		for target := range subcommands {
+			if target == "" {
+				continue
+			}
 			s = append(s, target)
 		}
 		fmt.Printf("%v", strings.Join(s, " "))
