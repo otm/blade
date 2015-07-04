@@ -26,7 +26,7 @@ function target.release(version, name, description)
 	blade.sh('git tag ' .. version)
 	blade.sh('git push --tags')
 
-	runner.sh(string.format("github-release release --user otm --repo blade --tag %s --name '%s' --description '%s'", version, name, description))
+	blade.sh(string.format("github-release release --user otm --repo blade --tag %s --name '%s' --description '%s'", version, name, description))
 
 	code, out = blade.system("ls -1 blade_*")
 	for file in out:gmatch"(.-)\n" do
