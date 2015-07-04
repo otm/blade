@@ -21,6 +21,18 @@ function notExported(file, op)
   print("Handle watched call: " .. file .. " (" .. op .. ")")
 end
 
+function target.hello(use)
+	use = use or "lua"
+
+  if use == "shell" then
+		blade.sh([[echo "hello world"]])
+  elseif use == "lua" then
+    print("hello world")
+  else
+    print("unknown option: " .. use)
+  end
+end
+
 function cmd.test(...)
   -- Running lua code
   -- This shows how to handle arguments from the command line
@@ -35,6 +47,8 @@ function cmd.test(...)
   blade.printStatus("0", 0)
   blade.printStatus("1", 1)
   blade.printStatus("nil")
+	blade.printStatus("true (shell)", blade._exec("true"))
+	blade.printStatus("false (shell)", blade._exec("false"))
 
 
   -- capture exit status and command output

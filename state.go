@@ -31,24 +31,25 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	blade.RawSetString("_exec", L.NewFunction(func(L *lua.LState) int {
 		return Sh(L, shNoEcho, shNoAbort)
 	}))
+	blade.RawSetString("shell", L.NewFunction(SetShell))
 	blade.RawSetString("printStatus", L.NewFunction(printStatus))
 	blade.RawSetString("compgen", L.NewFunction(Compgen))
 	blade.RawSetString("help", L.NewFunction(Help))
 	blade.RawSetString("setup", L.NewFunction(func(L *lua.LState) int { return 0 }))
 	blade.RawSetString("teardown", L.NewFunction(func(L *lua.LState) int { return 0 }))
 	blade.RawSetString("default", LPrintHelp)
+	L.SetGlobal("blade", blade)
 
 	plugin := L.NewTable()
 	plugin.RawSetString("watch", L.NewFunction(watch))
 	blade.RawSetString("plugin", plugin)
 
-	L.SetGlobal("blade", blade)
-
 	emit("Setting up cmd\n")
 	cmds := L.NewTable()
 	L.SetGlobal("cmd", cmds)
+	L.SetGlobal("target", cmds)
 
-	filename := "make.lua"
+	filename := "Bladerunner"
 	for {
 		wd, _ := os.Getwd()
 		emit("Looking for blade file: %v", wd)

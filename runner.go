@@ -109,6 +109,15 @@ func shNoAbort(opts *shOpts) {
 	opts.noAbort = true
 }
 
+// SetShell sets/returns the current shell
+func SetShell(L *lua.LState) int {
+	shell = L.CheckString(1)
+	L.Push(lua.LString(shell))
+	return 1
+}
+
+var shell = "bash"
+
 // Sh runs a shell command
 func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
 	b := new(bytes.Buffer)
@@ -117,7 +126,6 @@ func Sh(L *lua.LState, options ...func(opts *shOpts)) int {
 		option(opts)
 	}
 
-	shell := "bash"
 	cmd := exec.Command(shell, "-c", L.ToString(1))
 	cmd.Stdout = io.MultiWriter(b, os.Stdout)
 	cmd.Stderr = os.Stderr
