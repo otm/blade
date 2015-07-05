@@ -69,7 +69,7 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 
 	emit("Registring blade targets:\n")
 	cmds.ForEach(func(key, value lua.LValue) {
-		if f, ok := value.(*lua.LFunction); !ok {
+		if f, ok := value.(*lua.LFunction); ok {
 			emit(" * %v [target]", key)
 			_, name := subcommands.get(f)
 			subcommands.rename(name, key.String())
@@ -80,72 +80,59 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	return L, blade, cmds
 }
 
-func runLFunc(L *lua.LState, runner *lua.LTable, fn string) {
+func runLFunc(L *lua.LState, tbl *lua.LTable, fn string, args ...lua.LValue) error {
 	if err := L.CallByParam(lua.P{
-		Fn:      runner.RawGetString(fn),
+		Fn:      tbl.RawGetString(fn),
 		NRet:    1,
 		Protect: true,
-	}); err != nil {
+	}, args...); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	res := L.Get(-1)
 	L.Pop(1)
 	if b, ok := res.(lua.LBool); ok && b == false {
-		emit("Aborting execution: result = %v", b)
-		os.Exit(1)
+		return errAbort
 	}
+
+	return nil
 }
 
-// TODO (nils): rewrite these function
-func setup(L *lua.LState, runner *lua.LTable) {
+func setup(L *lua.LState, blade *lua.LTable, target string) error {
 	emit("Running blade setup")
-	runLFunc(L, runner, "setup")
+	return runLFunc(L, blade, "setup", lua.LString(target))
 }
 
-func teardown(L *lua.LState, runner *lua.LTable) {
+func teardown(L *lua.LState, blade *lua.LTable, target string) error {
 	emit("Running blade teardown")
-	runLFunc(L, runner, "teardown")
+	return runLFunc(L, blade, "teardown", lua.LString(target))
 }
 
-func defaultTarget(L *lua.LState, runner *lua.LTable) bool {
+func defaultTarget(L *lua.LState, blade *lua.LTable) error {
 	emit("Running default target")
-	runLFunc(L, runner, "default")
-	// TODO(nils): Align setup, teardown and defaultTarget functions
-	return true
+	return runLFunc(L, blade, "default")
 }
 
-func customTarget(L *lua.LState, runner *lua.LTable, target string, args []string) bool {
-	emit("Looking up target: %v", target)
-	fn := runner.RawGetString(target)
-	if fn.Type() == lua.LTNil {
-		emit("Unable to find target: %v, aborting...", target)
-		return false
+func lookupLFunc(L *lua.LState, tbl *lua.LTable, key string) error {
+	emit("Looking up target: %v", key)
+	value := tbl.RawGetString(key)
+	if value.Type() == lua.LTNil {
+		emit("Unable to find target: %v, aborting...", key)
+		return errUndefinedTarget
 	}
 
+	return nil
+}
+
+func customTarget(L *lua.LState, cmds *lua.LTable, target string, args []string) error {
 	emit("Running target: %v", target)
 	currentTarget = target
 
 	// preparing variables to function
-	var a []lua.LValue
+	var lvArgs []lua.LValue
 	for _, arg := range args {
-		a = append(a, lua.LString(arg))
+		lvArgs = append(lvArgs, lua.LString(arg))
 	}
 
-	if err := L.CallByParam(lua.P{
-		Fn:      fn,
-		NRet:    1,
-		Protect: true,
-	}, a...); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-	res := L.Get(-1) // returned value
-	L.Pop(1)         // remove received value
-	if b, ok := res.(lua.LBool); ok && b == false {
-		emit("Aborting execution: result = %v", b)
-		return false
-	}
-
-	return true
+	return runLFunc(L, cmds, target, lvArgs...)
 }

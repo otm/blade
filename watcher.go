@@ -14,52 +14,50 @@ import (
 )
 
 func watch(L *lua.LState) int {
-	args := L.CheckTable(1)
-	dir := lua.LVAsString(args.RawGetString("dir"))
-	recursive := lua.LVAsBool(args.RawGetString("recursive"))
-	filter := lua.LVAsString(args.RawGetString("filter"))
-	rFilter := regexp.MustCompile(filter)
+	var (
+		args      = L.CheckTable(1)
+		dir       = lua.LVAsString(args.RawGetString("dir"))
+		recursive = lua.LVAsBool(args.RawGetString("recursive"))
+		filter    = lua.LVAsString(args.RawGetString("filter"))
+		rFilter   = regexp.MustCompile(filter)
+		lvexclude = args.RawGetString("exclude")
+		callback  = args.RawGetString("callback")
+		excludes  []string
 
-	lvexclude := args.RawGetString("exclude")
-	var excludes []string
+		// abort is used for signaling to go process to stop processing file events
+		abort = make(chan struct{})
+	)
+
 	if exclude, ok := lvexclude.(*lua.LTable); ok {
 		exclude.ForEach(func(key, value lua.LValue) {
 			excludes = append(excludes, lua.LVAsString(value))
 		})
 	}
 	emit("Excludes: %v", excludes)
-	callback := args.RawGetString("callback")
 
 	if callback.Type() != lua.LTFunction {
-		fmt.Fprintf(os.Stdout, "fatal: callback not defined or not function\n")
-		os.Exit(1)
+		emitFatal("fatal: callback not defined or not function")
 	}
-	_, _ = recursive, filter
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "fatal: %v\n", err)
-		os.Exit(1)
+		emitFatal("fatal: %v", err)
 	}
 
-	abort := make(chan struct{})
+	// register a function to receive events that we are shuting down
+	// TODO (nils): This should be done by closing a chanel instead
 	cleanup <- func() {
 		abort <- struct{}{}
 		emit("Closing watcher")
 		watcher.Close()
 	}
 
+	// start up the event processor
 	go func() {
 		for {
 			select {
 			case event := <-watcher.Events:
-				emit("event: %v", event)
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					if filtered(event.Name, rFilter) {
-						emit("modified file: %v", event.Name)
-						notify(L, callback, event)
-					}
-				}
+				processFileEvent(L, callback, rFilter, event)
 			case err := <-watcher.Errors:
 				emit("watcher: %v", err)
 			case <-abort:
@@ -80,11 +78,20 @@ func watch(L *lua.LState) int {
 			fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 			os.Exit(1)
 		}
-
 	}
 
 	done = make(chan struct{})
 	return 0
+}
+
+func processFileEvent(L *lua.LState, callback lua.LValue, filter *regexp.Regexp, event fsnotify.Event) {
+	emit("event: %v", event)
+	if event.Op&fsnotify.Write == fsnotify.Write {
+		if filtered(event.Name, filter) {
+			emit("modified file: %v", event.Name)
+			notify(L, callback, event)
+		}
+	}
 }
 
 func filtered(file string, filter *regexp.Regexp) bool {
@@ -137,10 +144,9 @@ func notify(L *lua.LState, callback lua.LValue, event fsnotify.Event) {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
-	res := L.Get(-1) // returned value
-	L.Pop(1)         // remove received value
+	res := L.Get(-1)
+	L.Pop(1)
 	if b, ok := res.(lua.LBool); ok && b == false {
-		emit("Aborting execution: result = %v", b)
+		emitFatal("%v", errAbort)
 	}
-
 }

@@ -127,20 +127,20 @@ end
 ```
 
 ## Setup and teardown
-It is possible to run setup and teardown code that is run before and after the blade target. Returning false in the setup or teardown will abort the target execution.
+It is possible to run setup and teardown code that is run before and after the blade target. Both setup and teardown receive a `target` argument with the name of the current target to be run. If no target has been defined at the command line target will be an empty string. Returning false in the setup or teardown will abort the target execution.
 
-### blade.setup
+### blade.setup(target)
 ***Example:***
 ``` lua
-function blade.setup()
+function blade.setup(target)
   -- setup code
 end
 ```
 
-### teardown
+### teardown(target)
 ***Example:***
 ``` lua
-function blade.teardown()
+function blade.teardown(target)
   -- teardown code
 end
 ```

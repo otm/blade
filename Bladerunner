@@ -36,7 +36,7 @@ blade.help(target.release, "<version> [name] [description] - cross compile and c
 
 
 function target.clean()
-	blade.sh("rm blade_*")
+	blade.exec("rm blade blade_*")
 end
 
 blade.help(target.clean, " - clean working directory of builds")

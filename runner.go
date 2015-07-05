@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -14,20 +15,6 @@ import (
 var (
 	// shell contains the current shell used when running shell commands
 	shell = "bash"
-
-	// TODO (nils): Create subcommands in Help and Compgen function if needed
-	// and error if no target is bound to them efter control returns to Go
-
-	// helps contans the custom help messages for the targets
-	// this is only used after running the Bladerunner file
-	// the reason is that when the Lua script runs the help
-	// function is called, and we do not yet now if the target exists
-	//helps = make(map[*lua.LFunction]string)
-
-	// comgens contains custom helpers for generating bash compleation opts
-	// this is also a temporary function as we do not now if the Lua function
-	// is a target when the function is run
-	//compgens = make(map[*lua.LFunction]compgenerator)
 
 	// flg contains all flags from the command line
 	flg *flags
@@ -47,6 +34,9 @@ var (
 	// This is used when generating error messages for fatal errors when running
 	// targets.
 	currentTarget string
+
+	errAbort           = errors.New("user: abort")
+	errUndefinedTarget = errors.New("fatal: undefined target")
 )
 
 type target struct {
@@ -158,8 +148,14 @@ func main() {
 		return
 	}
 
-	setup(L, tbl)
-	defer teardown(L, tbl)
+	target := flag.Arg(0)
+
+	err := setup(L, tbl, target)
+	if err != nil {
+		emitErr("%v: setup", err)
+		return
+	}
+	defer teardown(L, tbl, target)
 
 	if flag.NArg() == 0 {
 		defaultTarget(L, tbl)
@@ -167,7 +163,12 @@ func main() {
 	}
 
 	if flag.NArg() > 0 {
-		customTarget(L, cmd, flag.Arg(0), flag.Args()[1:])
+		err := lookupLFunc(L, cmd, target)
+		if err != nil {
+			emitFatal("%v", err)
+		}
+
+		customTarget(L, cmd, target, flag.Args()[1:])
 		if done != nil {
 			emit("Waiting for done signal")
 			<-done
@@ -196,4 +197,13 @@ func emit(msgfmt string, args ...interface{}) {
 		return
 	}
 	log.Printf(msgfmt, args...)
+}
+
+func emitErr(msgfmt string, args ...interface{}) {
+	fmt.Fprintf(os.Stdout, msgfmt, args...)
+}
+
+func emitFatal(msgfmt string, args ...interface{}) {
+	fmt.Fprintf(os.Stdout, msgfmt, args...)
+	os.Exit(1)
 }
