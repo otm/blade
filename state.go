@@ -80,11 +80,9 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	return L, blade, cmds
 }
 
-// TODO (nils): rewrite these function
-func setup(L *lua.LState, runner *lua.LTable) {
-	emit("Running blade setup")
+func runLFunc(L *lua.LState, runner *lua.LTable, fn string) {
 	if err := L.CallByParam(lua.P{
-		Fn:      runner.RawGetString("setup"),
+		Fn:      runner.RawGetString(fn),
 		NRet:    1,
 		Protect: true,
 	}); err != nil {
@@ -97,44 +95,23 @@ func setup(L *lua.LState, runner *lua.LTable) {
 		emit("Aborting execution: result = %v", b)
 		os.Exit(1)
 	}
+}
+
+// TODO (nils): rewrite these function
+func setup(L *lua.LState, runner *lua.LTable) {
+	emit("Running blade setup")
+	runLFunc(L, runner, "setup")
 }
 
 func teardown(L *lua.LState, runner *lua.LTable) {
 	emit("Running blade teardown")
-	if err := L.CallByParam(lua.P{
-		Fn:      runner.RawGetString("teardown"),
-		NRet:    1,
-		Protect: true,
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-	res := L.Get(-1)
-	L.Pop(1)
-	if b, ok := res.(lua.LBool); ok && b == false {
-		emit("Aborting execution: Returned value not ok: %v", b)
-		os.Exit(1)
-	}
-
+	runLFunc(L, runner, "teardown")
 }
 
 func defaultTarget(L *lua.LState, runner *lua.LTable) bool {
 	emit("Running default target")
-	if err := L.CallByParam(lua.P{
-		Fn:      runner.RawGetString("default"),
-		NRet:    1,
-		Protect: true,
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-	res := L.Get(-1) // returned value
-	L.Pop(1)         // remove received value
-	if b, ok := res.(lua.LBool); ok && b == false {
-		emit("Aborting execution: result = %v", b)
-		return false
-	}
-
+	runLFunc(L, runner, "default")
+	// TODO(nils): Align setup, teardown and defaultTarget functions
 	return true
 }
 
@@ -145,10 +122,11 @@ func customTarget(L *lua.LState, runner *lua.LTable, target string, args []strin
 		emit("Unable to find target: %v, aborting...", target)
 		return false
 	}
-	emit("Running target: %v", target)
 
+	emit("Running target: %v", target)
 	currentTarget = target
 
+	// preparing variables to function
 	var a []lua.LValue
 	for _, arg := range args {
 		a = append(a, lua.LString(arg))
