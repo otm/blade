@@ -32,6 +32,12 @@ function target.release(version, name, description)
 	end
 end
 
+blade.compgen(target.release, function(compWords, compCWord)
+	if compCWord == 1 then
+		code, out = blade._sh("git tag")
+		return out
+	end
+end)
 blade.help(target.release, "<version> [name] [description] - cross compile and create release on Github")
 
 
@@ -42,7 +48,23 @@ end
 blade.help(target.clean, " - clean working directory of builds")
 
 function target.build()
-	blade.sh("gox")
+	go("gox")
 end
-
 blade.help(target.build, " - cross compile")
+
+function target.goxSetup()
+	blade.sh("go get github.com/mitchellh/gox")
+	blade.sh("go install github.com/mitchellh/gox")
+	go("gox -build-toolchain", {sudo=true})
+end
+blade.help(target.goxSetup, " - download, install and setup gox for cross compile")
+
+function go(cmd, options)
+	code, gopath = blade._sh("go env GOPATH")
+	gopath = (gopath:gsub("^%s*(.-)%s*$", "%1"))
+	if options and options.sudo then
+		return blade.sh("sudo " .. gopath .. "/bin/" .. cmd)
+	else
+		return blade.sh(gopath .. "/bin/" .. cmd)
+	end
+end

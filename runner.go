@@ -119,7 +119,7 @@ func setupInterupt() {
 			emit("Signaling shutdown")
 			close(done)
 		} else {
-			fmt.Fprintf(os.Stderr, "aborting: due to %v signal", sig)
+			fmt.Fprintf(os.Stderr, "aborting: due to %v signal\n", sig)
 		}
 	}()
 }

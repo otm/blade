@@ -22,6 +22,14 @@ go install github.com/otm/blade
 Pre built binaries can be downloaded at
 https://github.com/otm/blade/releases/latest
 
+## Cross Compile
+Getting blade to all your favorite platforms. Cross compiling can easily be done with gox. See https://github.com/mitchellh/gox for information about the tool. To setup and cross compile you can run.
+
+```
+blade goxSetup
+blade build
+```
+
 ## Bash Completion
 The -generate-bash-conf option outputs the bash completion configuration to stdout. Either manually copy it or you can for instance use `tee`:
 
