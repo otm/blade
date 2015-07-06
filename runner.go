@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"time"
 
 	"github.com/yuin/gopher-lua"
 )
@@ -25,10 +26,6 @@ var (
 	// done is used for signaling that we should abort the blade target execution
 	// and quit
 	done chan struct{}
-
-	// cleanup is used by go routines to receive notification that blade is shutting
-	// down so they can clean up and shutdown
-	cleanup = make(chan func(), 10)
 
 	// currentTarget is the name of the curret running target
 	// This is used when generating error messages for fatal errors when running
@@ -97,6 +94,7 @@ type flags struct {
 	genBashConf bool
 	compgen     bool
 	compCWords  int
+	bladefile   string
 }
 
 func init() {
@@ -105,6 +103,7 @@ func init() {
 	flag.BoolVar(&flg.compgen, "compgen", false, "Used for bash compleation")
 	flag.BoolVar(&flg.genBashConf, "generate-bash-conf", false, "Generate bash completion configuration")
 	flag.IntVar(&flg.compCWords, "comp-cwords", 0, "Used for bash compleation")
+	flag.StringVar(&flg.bladefile, "f", "", "Absolute path to non default blade file")
 }
 
 // setupInterupt is used for catching ctrl-c when we want to abort the current
@@ -118,7 +117,7 @@ func setupInterupt() {
 		emit("Received: %v", sig)
 		if done != nil {
 			emit("Signaling shutdown")
-			done <- struct{}{}
+			close(done)
 		} else {
 			fmt.Fprintf(os.Stderr, "aborting: due to %v signal", sig)
 		}
@@ -127,11 +126,6 @@ func setupInterupt() {
 
 func main() {
 	flag.Parse()
-	defer clean()
-
-	setupInterupt()
-
-	L, tbl, cmd := setupEnv()
 
 	if flg.genBashConf {
 		generateBashConfig()
@@ -139,9 +133,13 @@ func main() {
 	}
 
 	if flg.compgen {
-		compgen(L, subcommands)
+		compgen()
 		return
 	}
+
+	setupInterupt()
+
+	L, blade, cmd := setupEnv()
 
 	if flag.Arg(0) == "help" {
 		printHelp(L)
@@ -150,15 +148,15 @@ func main() {
 
 	target := flag.Arg(0)
 
-	err := setup(L, tbl, target)
+	err := setup(L, blade, target)
 	if err != nil {
 		emitErr("%v: setup", err)
 		return
 	}
-	defer teardown(L, tbl, target)
+	defer teardown(L, blade, target)
 
 	if flag.NArg() == 0 {
-		defaultTarget(L, tbl)
+		defaultTarget(L, blade)
 		return
 	}
 
@@ -169,25 +167,34 @@ func main() {
 		}
 
 		customTarget(L, cmd, target, flag.Args()[1:])
-		if done != nil {
-			emit("Waiting for done signal")
-			<-done
-		}
+		wait(done)
 		return
 	}
 }
 
-// clean is used for signals registered go routins that they should shutdown
-func clean() {
+func pause() {
+	if done != nil {
+		return
+	}
+
+	emit("Setting up done chanel")
+	done = make(chan struct{})
+}
+
+func wait(ch chan struct{}) {
+	if ch == nil {
+		return
+	}
+
+	emit("Waiting for done signal")
+	fmt.Printf("watching: ctrl-c to abort\n")
 	for {
-		var fn func()
 		select {
-		case fn = <-cleanup:
-			emit("Running cleanup function")
-			fn()
-		default:
-			emit("All cleaned up")
+		case <-ch:
+			emit("Done waiting")
 			return
+		default:
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }

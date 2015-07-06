@@ -1,25 +1,46 @@
-function blade.setup()
-	print("setup")
+-- The setup function is run before any other target
+function blade.setup(target)
+	-- if target is empty string blade is going to run the default target
+	if target == "" then
+		target = "<default>"
+	end
+	print(string.format(">> setup: %s <<", target))
 end
 
-function blade.teardown()
-	print("teardown")
+-- The teardown function is run after the blade target
+function blade.teardown(target)
+	print(string.format(">> teardown: %s <<", target))
 end
 
+-- By defining a blade.default function we can run an action if the
+-- no target was defined on the command line.
+-- Without specifying a blade.default function a help message will be displayed
 function blade.default()
 	print("======= default =======")
 	print("ENV: ", os.getenv("HOME"))
 	print("=======================")
 end
 
+
+-- Define a "watch" target and setup the watcher
+-- callback can be a closure or a reference to a function
+-- dir is a file or directory
+-- recursivly watch files (default false)
+-- filter is a regexp for files to include (default all files)
+-- exclude is a table with directories to not include when recursivly watching files
+--
+-- excluding large directories can greatly improve speed
+-- NOTE: The regexp in filter is a Go regexp and not Lua
 function target.watch()
-	blade.plugin.watch{callback=notExported, dir="test", recursive=true, filter="*.go", exclude={"projects", "project"}}
+	blade.plugin.watch{callback=notExported, dir=".", recursive=false, filter=".*\\.txt", exclude={"project"}}
 end
 
+-- To showcase how to use a function reference in the watcher, see target.watch
 function notExported(file, op)
   print("Handle watched call: " .. file .. " (" .. op .. ")")
 end
 
+-- Define a Hello world target with a input from the command line
 function target.hello(use)
 	use = use or "lua"
 
@@ -32,14 +53,23 @@ function target.hello(use)
   end
 end
 
-function target.test(...)
-  -- Running lua code
-  -- This shows how to handle arguments from the command line
-  print("Number of inputs: ", arg.n)
+-- Adding a bash completion lookup function for the target
+blade.compgen(target.hello, function(compWords, compCWords)
+	return compCWords == 1 and "lua shell" or ""
+end)
+
+-- Adding a help message to the "hello" target
+blade.help(target.hello, "<lua|shell>")
+
+-- Another example of handling inputs
+function target.glob(...)
+	print("Number of inputs: ", arg.n)
   for k, v in ipairs(arg) do
     print(k, "=", v)
   end
+end
 
+function target.printStatus()
   -- output command status
   blade.printStatus("true", true)
   blade.printStatus("false", false)
@@ -48,7 +78,9 @@ function target.test(...)
   blade.printStatus("nil")
 	blade.printStatus("true (shell)", blade._exec("true"))
 	blade.printStatus("false (shell)", blade._exec("false"))
+end
 
+function target.fail()
 
   -- capture exit status and command output
   exitStatus, out = blade.sh("echo 'Blade runner'")
@@ -66,12 +98,3 @@ function target.test(...)
   -- this statement is unreachable due to error on previus statement
   blade.sh([[echo "this should not run"]])
 end
-
-blade.compgen(target.test, function(compWords, compCWords)
-  if compCWords == 1 then
-	   return "unit system"
-   end
-   return ""
-end)
-
-blade.help(target.test, "<unit|system>")

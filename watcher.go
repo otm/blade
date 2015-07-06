@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -14,130 +13,89 @@ import (
 )
 
 func watch(L *lua.LState) int {
-	var (
-		args      = L.CheckTable(1)
-		dir       = lua.LVAsString(args.RawGetString("dir"))
-		recursive = lua.LVAsBool(args.RawGetString("recursive"))
-		filter    = lua.LVAsString(args.RawGetString("filter"))
-		rFilter   = regexp.MustCompile(filter)
-		lvexclude = args.RawGetString("exclude")
-		callback  = args.RawGetString("callback")
-		excludes  []string
+	emit("Starting fs watcher setup")
+	w := newWatcher(L.ToTable(1))
+	w.start(L)
 
-		// abort is used for signaling to go process to stop processing file events
-		abort = make(chan struct{})
-	)
+	return 0
+}
 
-	if exclude, ok := lvexclude.(*lua.LTable); ok {
-		exclude.ForEach(func(key, value lua.LValue) {
-			excludes = append(excludes, lua.LVAsString(value))
+type watcher struct {
+	callback  lua.LValue
+	dir       string
+	recursive bool
+	filter    *regexp.Regexp
+	excludes  []string
+
+	fsWatcher *fsnotify.Watcher
+}
+
+func newWatcher(args *lua.LTable) *watcher {
+	var err error
+
+	w := &watcher{
+		callback:  args.RawGetString("callback"),
+		dir:       lua.LVAsString(args.RawGetString("dir")),
+		recursive: lua.LVAsBool(args.RawGetString("recursive")),
+		filter:    regexp.MustCompile(lua.LVAsString(args.RawGetString("filter"))),
+	}
+
+	if tbl, ok := args.RawGetString("exclude").(*lua.LTable); ok {
+		w.excludes = make([]string, tbl.Len())
+		i := 0
+		tbl.ForEach(func(key, value lua.LValue) {
+			w.excludes[i] = lua.LVAsString(value)
+			i++
 		})
 	}
-	emit("Excludes: %v", excludes)
 
-	if callback.Type() != lua.LTFunction {
+	if w.callback.Type() != lua.LTFunction {
 		emitFatal("fatal: callback not defined or not function")
 	}
 
-	watcher, err := fsnotify.NewWatcher()
+	w.fsWatcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		emitFatal("fatal: %v", err)
 	}
 
-	// register a function to receive events that we are shuting down
-	// TODO (nils): This should be done by closing a chanel instead
-	cleanup <- func() {
-		abort <- struct{}{}
-		emit("Closing watcher")
-		watcher.Close()
-	}
-
-	// start up the event processor
-	go func() {
-		for {
-			select {
-			case event := <-watcher.Events:
-				processFileEvent(L, callback, rFilter, event)
-			case err := <-watcher.Errors:
-				emit("watcher: %v", err)
-			case <-abort:
-				emit("Shuting down watch routine")
-				return
-			}
-		}
-	}()
-
-	emit("Watching: %v", dir)
-	err = watcher.Add(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if recursive {
-		if err := addRecursivly(watcher, dir, excludes); err != nil {
-			fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	done = make(chan struct{})
-	return 0
+	return w
 }
 
-func processFileEvent(L *lua.LState, callback lua.LValue, filter *regexp.Regexp, event fsnotify.Event) {
+func (w *watcher) start(L *lua.LState) error {
+	pause()
+	go w.watch(L)
+	err := w.addWatchers(w.dir)
+	return err
+}
+
+func (w *watcher) watch(L *lua.LState) {
+	for {
+		select {
+		case event := <-w.fsWatcher.Events:
+			w.processFileEvent(L, event)
+		case err := <-w.fsWatcher.Errors:
+			emit("watcher: %v", err)
+		case <-done:
+			emit("Closing watcher")
+			w.fsWatcher.Close()
+			return
+		}
+	}
+}
+
+func (w *watcher) processFileEvent(L *lua.LState, event fsnotify.Event) {
 	emit("event: %v", event)
 	if event.Op&fsnotify.Write == fsnotify.Write {
-		if filtered(event.Name, filter) {
+		if w.filter.MatchString(event.Name) {
 			emit("modified file: %v", event.Name)
-			notify(L, callback, event)
+			w.notify(L, event)
 		}
 	}
 }
 
-func filtered(file string, filter *regexp.Regexp) bool {
-	if match := filter.MatchString(file); match {
-		emit("%v: included", file)
-		return true
-	}
-	emit("%v: skipping", file)
-	return false
-}
-
-func addRecursivly(watcher *fsnotify.Watcher, dir string, excludes []string) error {
-	emit("Watch: checking dir %v", dir)
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return fmt.Errorf("error reading dir %v: %v", dir, err)
-	}
-
-Next:
-	for _, file := range files {
-		if file.IsDir() && !strings.HasPrefix(file.Name(), ".") {
-			for _, exclude := range excludes {
-				if strings.Contains(file.Name(), exclude) {
-					emit("Skipping: %v/%v", dir, file.Name())
-					continue Next
-				}
-			}
-
-			emit("watching: %v", file.Name())
-			err := watcher.Add(fmt.Sprintf("%v/%v", dir, file.Name()))
-			if err != nil {
-				return fmt.Errorf("error reading %v: %v", file.Name(), err)
-			}
-			err = addRecursivly(watcher, fmt.Sprintf("%v/%v", dir, file.Name()), excludes)
-			if err != nil {
-				return fmt.Errorf("error processing %v: %v", file.Name(), err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func notify(L *lua.LState, callback lua.LValue, event fsnotify.Event) {
+func (w *watcher) notify(L *lua.LState, event fsnotify.Event) {
 	if err := L.CallByParam(lua.P{
-		Fn:      callback,
+		Fn:      w.callback,
 		NRet:    1,
 		Protect: true,
 	}, lua.LString(event.Name), lua.LString("write")); err != nil {
@@ -149,4 +107,59 @@ func notify(L *lua.LState, callback lua.LValue, event fsnotify.Event) {
 	if b, ok := res.(lua.LBool); ok && b == false {
 		emitFatal("%v", errAbort)
 	}
+}
+
+func (w *watcher) addWatchers(name string) error {
+	f, err := os.Open(name)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	err = w.fsWatcher.Add(name)
+	if err != nil {
+		return err
+	}
+
+	if fi.Mode().IsRegular() {
+		emit("watch: Adding regular file %v", name)
+	} else {
+		emit("watch: Adding directory %v", name)
+	}
+
+	if !w.recursive {
+		return nil
+	}
+
+	emit("Watch: checking dir %v", name)
+	files, err := ioutil.ReadDir(name)
+	if err != nil {
+		return fmt.Errorf("error reading dir %v: %v", name, err)
+	}
+
+Next:
+	for _, file := range files {
+		if !file.IsDir() || strings.HasPrefix(file.Name(), ".") {
+			continue Next
+		}
+
+		for _, exclude := range w.excludes {
+			if strings.Contains(file.Name(), exclude) {
+				emit("Skipping: %v/%v", name, file.Name())
+				continue Next
+			}
+		}
+
+		err = w.addWatchers(fmt.Sprintf("%v/%v", name, file.Name()))
+		if err != nil {
+			return fmt.Errorf("error processing %v: %v", file.Name(), err)
+		}
+	}
+
+	return nil
 }

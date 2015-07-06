@@ -45,16 +45,24 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 
 	// Search for Bladerunner file
 	filename := "Bladerunner"
+	if flg.bladefile != "" {
+		filename = flg.bladefile
+	}
+
 	for {
 		wd, _ := os.Getwd()
 		emit("Looking for blade file: %v", wd)
 		if _, err := os.Stat(filename); err == nil {
-			emit("Found blade file")
+			emit("Found blade file: %v", filename)
 			break
 		}
 
 		if wd == "/" {
-			fmt.Printf("fatal: No blade file (or in any parent directory): %v\n", filename)
+			if flg.compgen {
+				emit("fatal: No blade file (or in any parent directory): %v\n", filename)
+			} else {
+				fmt.Printf("fatal: No blade file (or in any parent directory): %v\n", filename)
+			}
 			os.Exit(1)
 		}
 

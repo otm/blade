@@ -22,6 +22,7 @@ func (sc *funcCompgen) compgen(L *lua.LState, compWords []string, compCWords int
 	for _, v := range compWords {
 		tbl.Append(lua.LString(v))
 	}
+
 	if err := L.CallByParam(lua.P{
 		Fn:      sc.f,
 		NRet:    1,
@@ -34,6 +35,7 @@ func (sc *funcCompgen) compgen(L *lua.LState, compWords []string, compCWords int
 	ret := L.Get(-1)
 	L.Pop(1)
 
+	emit("Got %v", ret.String())
 	return ret.String()
 }
 
@@ -61,16 +63,17 @@ func printFlags() {
 	fmt.Printf("%v", strings.Join(s, " "))
 }
 
-func compgen(L *lua.LState, subcommands targets) {
+func compgen() {
 	// create and shift of the program name
 	args := flag.Args()
 	args = shift(args)
 	index := 1
+	prev := ""
 
 	// analyse flags, since it has to start with "-" len(args) must be greater then 0
 	for len(args) > 0 {
-		if string(args[0][0]) == "-" {
-			args = shift(args)
+		if string(args[0][0]) == "-" || prev == "-f" {
+			prev, args = args[0], shift(args)
 			if flg.compCWords == index {
 				printFlags()
 				return
@@ -80,6 +83,9 @@ func compgen(L *lua.LState, subcommands targets) {
 			break
 		}
 	}
+
+	// setup Lua environment
+	L, _, _ := setupEnv()
 
 	// analyse runner targets
 	if flg.compCWords == index {
@@ -109,7 +115,21 @@ func generateBashConfig() {
     local cur prev opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    opts=$(blade -compgen -comp-cwords $COMP_CWORD ${COMP_WORDS[@]})
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ ${prev} == -f ]]; then
+      if  [[ $(declare -f _filedir) ]]; then
+        _filedir
+      else
+        COMPREPLY=( $(compgen -f -- ${cur}) )
+      fi
+      return 0
+    fi
+
+    flags=$(echo "${COMP_WORDS[@]}")
+    flag=$(expr "${flags}" : '.*\(-f [^ ]* *\)')
+
+    opts=$(blade $flag -compgen -comp-cwords $COMP_CWORD ${COMP_WORDS[@]})
     COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
     return 0
 }
