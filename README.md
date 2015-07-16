@@ -304,4 +304,25 @@ This section contains some Lua tips for new users
 * Read environment variables: `os.getenv("HOME")`
 * if-else: `if <statement> then <code> elseif <statement> then <code> else <code> end`
 * named function variables: `fn{key=name, ...}`
-* equivalent: `arg = {key=name, ...}; fn(arg)`
+ equivalent: `arg = {key=name, ...}; fn(arg)`
+* reading files in directory:
+``` lua
+for file in io.popen("ls -1 *.go"):lines() do
+  --use file
+end
+```
+
+### string:split(sep, cb) => iterator
+Splitting strings can be done in many ways in Lua but they are all quite cumbersome. To aid this there is a non standard Lua function for splitting strings in blade
+
+Example:
+``` lua
+out = "first\nsecond"
+for line in out:split("\n") do
+  print("i", line)
+end
+
+out:split("\n", function(line)
+  print("cb", line)
+end)
+```

@@ -43,6 +43,9 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	L.SetGlobal("cmd", cmds)
 	L.SetGlobal("target", cmds)
 
+	emit("Decorating string library")
+	decorateStringLib(L)
+
 	// Search for Bladerunner file
 	filename := "Bladerunner"
 	if flg.bladefile != "" {

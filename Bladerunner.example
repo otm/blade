@@ -98,3 +98,21 @@ function target.fail()
   -- this statement is unreachable due to error on previus statement
   blade.sh([[echo "this should not run"]])
 end
+
+-- files lists all Go files in the directory
+function target.files()
+	for file in io.popen("ls -1 *.go"):lines() do
+		print("File:", file)
+	end
+end
+
+function target.split()
+	out = "first\nsecond"
+	for line in out:split("\n") do
+		print("i", line)
+	end
+
+	out:split("\n", function(line)
+		print("cb", line)
+	end)
+end
