@@ -252,9 +252,9 @@ function(compWords, compCWord)
 * compCWord: a int pointing to the cursor position (zero indexed)
 
 **Note on cursor position:** (cursor denoted by "|")
-blade target | ==> compWords = { target }, compCWord = 1  
-blade target opt1| ==> compWords = { target, opt1 }, compCWord = 1
-balde target opt1 | ==> compWords = { target, opt1 }, compCWord = 2
+* blade target | ==> compWords = { target }, compCWord = 1  
+* blade target opt1| ==> compWords = { target, opt1 }, compCWord = 1
+* balde target opt1 | ==> compWords = { target, opt1 }, compCWord = 2
 
 ***Example:***
 ``` lua
