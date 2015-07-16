@@ -1,22 +1,18 @@
 
+-- relase <version> [name] [description]
 function target.release(version, name, description)
-	if version == nil then
-		print("fatal: no version specified")
-		return
-	end
+	assert(version, "fatal: no version specified")
 
 	name = name or string.format("blade %s", version)
 	description = description or string.format("blade %s", version)
 
 	if not string.match(version, "^v%d[.]%d[.]%d$") then
-		print("fatal: version must be on the form 'vX.X.X'")
-		return
+		error("fatal: version must be on the form 'vX.X.X'")
 	end
 
 	exitCode, output = blade._exec('git status --porcelain')
 	if output ~= "" then
-		print("fatal: uncommited changes")
-		return
+		error("fatal: uncommited changes")
 	end
 
 	target.build()
@@ -26,10 +22,10 @@ function target.release(version, name, description)
 	blade.sh(string.format("github-release release --user otm --repo blade --tag %s --name '%s' --description '%s'", version, name, description))
 
 	code, out = blade.system("ls -1 blade_*")
-	for file in out:gmatch"(.-)\n" do
+	out:gsub("(.-)\n", function(line)
 		code = blade.system(string.format("github-release upload --user otm --repo blade --tag %s --name %s --file %s", version, file, file))
 		blade.printStatus(file, code)
-	end
+	end)
 end
 
 blade.compgen(target.release, function(compWords, compCWord)
@@ -62,9 +58,10 @@ blade.help(target.goxSetup, " - download, install and setup gox for cross compil
 function go(cmd, options)
 	code, gopath = blade._sh("go env GOPATH")
 	gopath = (gopath:gsub("^%s*(.-)%s*$", "%1"))
+	cmd = gopath .. "/bin/" .. cmd
 	if options and options.sudo then
-		return blade.sh("sudo " .. gopath .. "/bin/" .. cmd)
-	else
-		return blade.sh(gopath .. "/bin/" .. cmd)
+		cmd = "sudo " .. cmd
 	end
+
+	return blade.sh(cmd)
 end
