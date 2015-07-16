@@ -22,11 +22,10 @@ function target.release(version, name, description)
 
 	blade.sh(string.format("github-release release --user otm --repo blade --tag %s --name '%s' --description '%s'", version, name, description))
 
-	code, out = blade.system("ls -1 blade_*")
-	out:gsub("(.-)\n", function(line)
+	for file in io.popen("ls -1 blade_*"):lines() do
 		code = blade.system(string.format("github-release upload --user otm --repo blade --tag %s --name %s --file %s", version, file, file))
 		blade.printStatus(file, code)
-	end)
+	end
 end
 
 blade.compgen(target.release, function(compWords, compCWord)
