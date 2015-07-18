@@ -58,9 +58,34 @@ To execute the target run
 blade hello
 ```
 
+Let's add a friendly help message to our target. That is done by creating a Lua comment on the function.
+``` lua
+-- prints a "hello world" message
+function target.hello()
+  print("hello world")
+end
+```
+
+Running `blade` or `blade help` will now create the following message:
+
+```
+Usage: blade [OPTION] [<target>] [<args>]
+
+Options:
+  -comp-cwords=0: Used for bash compleation
+  -compgen=false: Used for bash compleation
+  -debug=false: Enable debug output
+  -f="": Absolute path to non default blade file
+  -generate-bash-conf=false: Generate bash completion configuration
+
+Targets:
+  hello: prints a "hello world" message
+```
+
 Lets expand the example by processing command line parameters.
 
 ``` lua
+-- <lua|shell> - prints a "hello world" message in Lua or Shell
 function target.hello(use)
   use = use or "lua"
 
@@ -80,6 +105,7 @@ blade hello
 blade hello lua
 blade hello shell
 blade hello foo
+blade help
 ```
 ## Targets
 Defining new blade targets is done by adding functions to the target table.
