@@ -31,6 +31,7 @@ func printHelp(L *lua.LState) int {
 		i++
 	}
 	sort.Strings(keys)
+
 	for _, target := range keys {
 		fmt.Printf("  %v: %v\n", transform(target), strings.Trim(subcommands[target].help, "\n"))
 	}

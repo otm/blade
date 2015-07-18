@@ -15,12 +15,13 @@ end
 -- By defining a blade.default function we can run an action if the
 -- no target was defined on the command line.
 -- Without specifying a blade.default function a help message will be displayed
+
+-- display HOME environment variable
 function blade.default()
 	print("======= default =======")
 	print("ENV: ", os.getenv("HOME"))
 	print("=======================")
 end
-
 
 -- Define a "watch" target and setup the watcher
 -- callback can be a closure or a reference to a function
@@ -31,6 +32,8 @@ end
 --
 -- excluding large directories can greatly improve speed
 -- NOTE: The regexp in filter is a Go regexp and not Lua
+
+-- watch txt files in .
 function target.watch()
 	blade.plugin.watch{callback=notExported, dir=".", recursive=false, filter=".*\\.txt", exclude={"project"}}
 end
@@ -58,10 +61,10 @@ blade.compgen(target.hello, function(compWords, compCWords)
 	return compCWords == 1 and "lua shell" or ""
 end)
 
--- Adding a help message to the "hello" target
+-- Adding a help message to the "hello" target, overriding the comment on the target function
 blade.help(target.hello, "<lua|shell>")
 
--- Another example of handling inputs
+-- showcase how to read on all command line parameters
 function target.glob(...)
 	print("Number of inputs: ", arg.n)
   for k, v in ipairs(arg) do
@@ -69,6 +72,7 @@ function target.glob(...)
   end
 end
 
+-- showcase the printStatus functionality
 function target.printStatus()
   -- output command status
   blade.printStatus("true", true)
@@ -80,6 +84,7 @@ function target.printStatus()
 	blade.printStatus("false (shell)", blade._exec("false"))
 end
 
+-- showcase automatic command abort when shell command returns non-zero exit code
 function target.fail()
 
   -- capture exit status and command output
@@ -106,6 +111,7 @@ function target.files()
 	end
 end
 
+-- showcase how to split strings
 function target.split()
 	out = "first\nsecond"
 	for line in out:split("\n") do

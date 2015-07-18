@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/otm/blade/parser"
 	"github.com/yuin/gopher-lua"
 )
 
@@ -78,14 +79,41 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 		os.Exit(1)
 	}
 
+	emit("Parsing comments")
+	comments, err := parser.File(filename)
+	if err != nil {
+		emitFatal("%v", err)
+	}
+
 	emit("Registring blade targets:\n")
 	cmds.ForEach(func(key, value lua.LValue) {
 		if f, ok := value.(*lua.LFunction); ok {
 			emit(" * %v [target]", key)
-			_, name := subcommands.get(f)
+			subcommand, name := subcommands.get(f)
 			subcommands.rename(name, key.String())
+
+			if comment, err := comments.Get(f.Proto.LineDefined - 1); err == nil && subcommand.help == "" {
+				subcommand.help = comment.Value
+			}
+
 		}
 	})
+
+	// Check if we have a default target defined
+	if blade.RawGetString("default").(*lua.LFunction).Proto != nil {
+		if _, ok := subcommands[""]; !ok {
+			subcommand, name := subcommands.get(blade.RawGetString("default").(*lua.LFunction))
+			subcommands.rename(name, "")
+
+			if comment, err := comments.Get(subcommand.cmd.Proto.LineDefined - 1); err == nil && subcommand.help == "" {
+				subcommand.help = comment.Value
+			}
+		}
+		emit("Add default target to subcommands, l: %v", blade.RawGetString("default").(*lua.LFunction).Proto.LineDefined)
+
+	}
+	//subcommands = append(subcommands, )
+
 	subcommands.validate()
 
 	return L, blade, cmds
