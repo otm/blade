@@ -1,6 +1,6 @@
 
 
--- relase <version> [name] [description]
+--<version> [name] [description] - cross compile and create release on Github
 function target.release(version, name, description)
 	assert(version, "fatal: no version specified")
 
@@ -34,26 +34,23 @@ blade.compgen(target.release, function(compWords, compCWord)
 		return out
 	end
 end)
-blade.help(target.release, "<version> [name] [description] - cross compile and create release on Github")
 
-
+--clean working directory of builds
 function target.clean()
 	blade.exec("rm blade blade_*")
 end
 
-blade.help(target.clean, " - clean working directory of builds")
-
+--cross compile
 function target.build()
 	go("gox")
 end
-blade.help(target.build, " - cross compile")
 
+--download, install and setup gox for cross compile
 function target.goxSetup()
 	blade.sh("go get github.com/mitchellh/gox")
 	blade.sh("go install github.com/mitchellh/gox")
 	go("gox -build-toolchain", {sudo=true})
 end
-blade.help(target.goxSetup, " - download, install and setup gox for cross compile")
 
 function go(cmd, options)
 	code, gopath = blade._sh("go env GOPATH")
