@@ -47,7 +47,7 @@ func LexMultiLineComment(lexer *Lexer) LexFn {
 	lexer.Ignore()
 
 	for {
-		if strings.HasPrefix(lexer.InputToEnd(), MinusSign+RightBracket) {
+		if strings.HasPrefix(lexer.InputToEnd(), RightBracket) {
 			lexer.Emit(TComment)
 			return LexBegin(lexer)
 		}

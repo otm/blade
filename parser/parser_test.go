@@ -16,12 +16,12 @@ function test
 
 --[[1
 Multi2
-3--]]
+3]]
 var test  = 32
 `
 	comments := String(s)
-	fmt.Printf("R: 2 == %v, Comment 1 = %v\n", comments[0].row, comments[0].value)
-	fmt.Printf("R: 4 == %v, Comment 1 = %v\n", comments[1].row, comments[1].value)
-	fmt.Printf("R: 7 == %v, Comment 1 = %v\n", comments[2].row, comments[2].value)
-	fmt.Printf("R: 11 == %v, Comment 1 = %v\n", comments[3].row, comments[3].value)
+	fmt.Printf("R: 2 == %v, Comment 1 = %v\n", comments[0].Row, comments[0].Value)
+	fmt.Printf("R: 4 == %v, Comment 1 = %v\n", comments[1].Row, comments[1].Value)
+	fmt.Printf("R: 7 == %v, Comment 1 = %v\n", comments[2].Row, comments[2].Value)
+	fmt.Printf("R: 11 == %v, Comment 1 = %v\n", comments[3].Row, comments[3].Value)
 }
