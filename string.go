@@ -10,6 +10,7 @@ func decorateStringLib(L *lua.LState) {
 	mt := L.GetMetatable(lua.LString("")).(*lua.LTable)
 	mt.RawSetString("split", L.NewClosure(split))
 	mt.RawSetString("c", L.NewClosure(word))
+	mt.RawSetString("trim", L.NewClosure(trim))
 }
 
 func split(L *lua.LState) int {
@@ -57,5 +58,14 @@ func word(L *lua.LState) int {
 	}
 
 	L.Push(lua.LString(parts[i-1]))
+	return 1
+}
+
+func trim(L *lua.LState) int {
+	s := L.CheckString(1)
+	cutset := L.OptString(2, "\n ")
+
+	s = strings.Trim(s, cutset)
+	L.Push(lua.LString(s))
 	return 1
 }

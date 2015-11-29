@@ -42,6 +42,7 @@ end
 
 --cross compile
 function target.build()
+	sh.go("generate")
 	go("gox")
 end
 
@@ -53,7 +54,7 @@ function target.goxSetup()
 end
 
 function go(cmd, options)
-	code, gopath = blade._sh("go env GOPATH")
+	code, gopath = blade.system("go env GOPATH")
 	gopath = (gopath:gsub("^%s*(.-)%s*$", "%1"))
 	cmd = gopath .. "/bin/" .. cmd
 	if options and options.sudo then

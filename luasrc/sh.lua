@@ -97,11 +97,9 @@ local function command(cmd, ...)
 			f:close()
 			s = s .. ' <'..M.tmpfile
 		end
+		print("cmd", s)
 
 		local exit, output, stderr = blade.system(s)
-		-- local p = io.popen(s, 'r')
-		-- local output = p:read('*a')
-		-- local _, exit, status = p:close()
 		os.remove(M.tmpfile)
 
 		local t = {

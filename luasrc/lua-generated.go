@@ -100,11 +100,9 @@ local function command(cmd, ...)
 			f:close()
 			s = s .. ' <'..M.tmpfile
 		end
+		print("cmd", s)
 
 		local exit, output, stderr = blade.system(s)
-		-- local p = io.popen(s, 'r')
-		-- local output = p:read('*a')
-		-- local _, exit, status = p:close()
 		os.remove(M.tmpfile)
 
 		local t = {
@@ -211,6 +209,7 @@ sudo = sh.sudo
 
 -- export command() function and configurable temporary "input" file
 M.command = sh.command
+M.subcommand = sh.subcommand
 M.tmpfile = '/tmp/shluainput'
 
 -- allow to call sh to run shell commands
