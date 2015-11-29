@@ -13,6 +13,8 @@ import (
 	"github.com/yuin/gopher-lua"
 )
 
+//go:generate go run scripts/include.go
+
 var (
 	// shell contains the current shell used when running shell commands
 	shell = "bash"

@@ -1,4 +1,4 @@
-
+local sh = require('sh')
 
 --<version> [name] [description] - cross compile and create release on Github
 function target.release(version, name, description)

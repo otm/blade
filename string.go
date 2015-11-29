@@ -9,6 +9,7 @@ import (
 func decorateStringLib(L *lua.LState) {
 	mt := L.GetMetatable(lua.LString("")).(*lua.LTable)
 	mt.RawSetString("split", L.NewClosure(split))
+	mt.RawSetString("c", L.NewClosure(word))
 }
 
 func split(L *lua.LState) int {
@@ -39,5 +40,22 @@ func split(L *lua.LState) int {
 	}
 
 	L.Push(L.NewClosure(iterator))
+	return 1
+}
+
+func word(L *lua.LState) int {
+	s := L.CheckString(1)
+	i := L.CheckInt(2)
+	if int(i) <= 0 {
+		L.RaiseError("Index mus be greater then 0")
+	}
+
+	parts := strings.Fields(s)
+	if int(i) > len(parts) {
+		L.Push(lua.LString(""))
+		return 1
+	}
+
+	L.Push(lua.LString(parts[i-1]))
 	return 1
 }

@@ -14,6 +14,28 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+func loader(src string) lua.LGFunction {
+	var loader lua.LGFunction = func(L *lua.LState) int {
+		fn, err := L.LoadString(src)
+		if err != nil {
+			emitFatal("unable to load source: %v", err)
+		}
+
+		L.Push(fn)
+		err = L.PCall(0, 1, nil)
+		if err != nil {
+			emitFatal("unable to run module source %v", err)
+		}
+
+		mod := L.Get(-1)
+
+		L.Push(mod)
+		return 1
+	}
+
+	return loader
+}
+
 // Help registers help commands in lua
 func Help(L *lua.LState) int {
 	targetFunc := L.CheckFunction(1)
