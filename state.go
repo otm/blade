@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/otm/blade/luasrc"
 	"github.com/otm/blade/parser"
+	"github.com/otm/blade/sh"
 	"github.com/yuin/gopher-lua"
 )
 
@@ -41,10 +41,7 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	L.SetGlobal("blade", blade)
 
 	emit("Preloading module: sh")
-	L.PreloadModule("sh", loader(luasrc.Sh))
-
-	emit("Preloading module: shell")
-	L.PreloadModule("shell", loader(luasrc.Shell))
+	L.PreloadModule("sh", sh.Loader)
 
 	emit("Setting up cmd\n")
 	cmds := L.NewTable()

@@ -11,6 +11,7 @@ func decorateStringLib(L *lua.LState) {
 	mt.RawSetString("split", L.NewClosure(split))
 	mt.RawSetString("c", L.NewClosure(word))
 	mt.RawSetString("trim", L.NewClosure(trim))
+	mt.RawSetString("fields", L.NewFunction(fields))
 }
 
 func split(L *lua.LState) int {
@@ -58,6 +59,25 @@ func word(L *lua.LState) int {
 	}
 
 	L.Push(lua.LString(parts[i-1]))
+	return 1
+}
+
+func fields(L *lua.LState) int {
+	s := L.CheckString(1)
+	i := 0
+
+	parts := strings.Fields(s)
+	iterator := func(L *lua.LState) int {
+		if i == len(parts) {
+			return 0
+		}
+
+		L.Push(lua.LString(parts[i]))
+		i++
+		return 1
+	}
+
+	L.Push(L.NewFunction(iterator))
 	return 1
 }
 
