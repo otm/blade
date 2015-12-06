@@ -131,7 +131,7 @@ func setupInterupt() {
 }
 
 func writeFile() {
-	file := "Bladerunner"
+	file := "Bladefile"
 	_, err := os.Stat(file)
 	if err == nil {
 		emitFatal("Configuration file exits: %v\n", file)
