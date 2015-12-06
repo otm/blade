@@ -15,6 +15,7 @@ Blade is a task runner designed to be easy, small, highly powerful, and with bui
 
 ## Contents
 <!-- TOC depth:3 withLinks:1 updateOnSave:0 orderedList:0 -->
+
 - [Blade](#blade)
 - [Features](#features)
 - [Contents](#contents)
@@ -43,6 +44,7 @@ Blade is a task runner designed to be easy, small, highly powerful, and with bui
 	- [string:split(sep, cb) => iterator](#stringsplitsep-cb-iterator)
 - [Build from Source](#build-from-source)
 - [Cross Compile](#cross-compile)
+
 <!-- /TOC -->
 
 ## Install
