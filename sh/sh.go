@@ -3,6 +3,7 @@ package sh
 import "github.com/yuin/gopher-lua"
 
 var exports = map[string]lua.LGFunction{}
+var abort = false
 
 // Loader is used for preloading a module
 func Loader(L *lua.LState) int {
@@ -39,6 +40,10 @@ func moduleIndex(L *lua.LState) int {
 }
 
 func moduleCall(L *lua.LState) int {
+	if L.GetTop() == 2 && L.Get(2).Type() == lua.LTTable {
+		return configure(L)
+	}
+
 	path := L.CheckString(2)
 	args := checkStrings(L, 3)
 
@@ -50,4 +55,29 @@ func moduleCall(L *lua.LState) int {
 
 	L.Push(cmd.UserData(L))
 	return 1
+}
+
+func configure(L *lua.LState) int {
+	conf := L.CheckTable(2)
+
+	emptyTable := true
+	conf.ForEach(func(key, value lua.LValue) {
+		emptyTable = false
+		switch key.String() {
+		case "abort":
+			if v, ok := value.(lua.LBool); ok {
+				abort = bool(v)
+				return
+			}
+			L.RaiseError("abort: type error: expected `%v`, got `%v`", lua.LTBool, value.Type())
+		}
+	})
+
+	if emptyTable {
+		conf.RawSetString("abort", lua.LBool(abort))
+		L.Push(conf)
+		return 1
+	}
+
+	return 0
 }

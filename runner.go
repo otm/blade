@@ -4,12 +4,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
 	"time"
 
+	"github.com/otm/blade/luasrc"
 	"github.com/yuin/gopher-lua"
 )
 
@@ -95,6 +97,7 @@ type flags struct {
 	debug       bool
 	genBashConf bool
 	compgen     bool
+	init        bool
 	compCWords  int
 	bladefile   string
 }
@@ -106,6 +109,7 @@ func init() {
 	flag.BoolVar(&flg.genBashConf, "generate-bash-conf", false, "Generate bash completion configuration")
 	flag.IntVar(&flg.compCWords, "comp-cwords", 0, "Used for bash compleation")
 	flag.StringVar(&flg.bladefile, "f", "", "Absolute path to non default blade file")
+	flag.BoolVar(&flg.init, "init", false, "Create a Bladefilein the current directory")
 }
 
 // setupInterupt is used for catching ctrl-c when we want to abort the current
@@ -126,11 +130,33 @@ func setupInterupt() {
 	}()
 }
 
+func writeFile() {
+	file := "Bladerunner"
+	_, err := os.Stat(file)
+	if err == nil {
+		emitFatal("Configuration file exits: %v\n", file)
+	}
+	if !os.IsNotExist(err) {
+		emitFatal("Error checking file existens: %v\n", err)
+	}
+
+	//fmt.Println(luasrc.Bladeinit)
+	err = ioutil.WriteFile(file, []byte(luasrc.Bladeinit), 0644)
+	if err != nil {
+		emitFatal("Could not write configuration: %v", err)
+	}
+}
+
 func main() {
 	flag.Parse()
 
 	if flg.genBashConf {
 		generateBashConfig()
+		return
+	}
+
+	if flg.init {
+		writeFile()
 		return
 	}
 

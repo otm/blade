@@ -24,6 +24,7 @@ type shellCommand struct {
 	stderr  io.ReadCloser
 	stdin   io.ReadCloser
 
+	waitCalled   bool
 	stdoutClosed bool
 	stderrClosed bool
 }
@@ -94,7 +95,7 @@ func (s *shellCommand) IsClosed(std string) bool {
 	case "stdout":
 		return s.stdoutClosed
 	default:
-		log.Fatalf("unable to close stream: %v", std)
+		log.Fatalf("Unknown option: %v", std)
 	}
 	return false
 }
@@ -120,7 +121,7 @@ func shIndex(L *lua.LState) int {
 	case "exitcode":
 		L.Push(L.NewFunction(shExitCode))
 		return 1
-	case "stdout", "stderr":
+	case "stdout", "stderr", "combinedOutput":
 		L.Push(L.NewFunction(shOutput(index)))
 		return 1
 	default:
@@ -132,8 +133,6 @@ func shIndex(L *lua.LState) int {
 func shCmd(L *lua.LState) int {
 	shellCmd := checkShellCmd(L)
 	index := L.CheckString(2)
-
-	go shellCmd.command.Wait()
 
 	cmd := &shellCommand{
 		path:  index,
@@ -168,9 +167,16 @@ func shOutput(std string) lua.LGFunction {
 		shellCmd := checkShellCmd(L)
 		file := L.OptString(2, "")
 
-		stream := shellCmd.stdout
+		if shellCmd.waitCalled {
+			L.RaiseError("Do not call `ok` or `success` before print")
+		}
+
+		stream := io.MultiReader(shellCmd.stdout, shellCmd.stderr)
 		if std == "stderr" {
 			stream = shellCmd.stderr
+		}
+		if std == "stdout" {
+			stream = shellCmd.stdout
 		}
 
 		buf := new(bytes.Buffer)
@@ -179,7 +185,12 @@ func shOutput(std string) lua.LGFunction {
 			L.RaiseError("Unable to read from `%v` several times", std)
 		}
 
-		shellCmd.Close(std)
+		if std == "stderr" || std == "stdout" {
+			shellCmd.Close(std)
+		} else {
+			shellCmd.CloseStderr()
+			shellCmd.CloseStdout()
+		}
 
 		if file != "" {
 			err := ioutil.WriteFile(file, buf.Bytes(), 0644)
@@ -196,7 +207,7 @@ func shOk(L *lua.LState) int {
 	ud := L.CheckUserData(1)
 	shellCmd := checkShellCmd(L)
 
-	exitcode, err := wait(shellCmd)
+	exitcode, err := wait(L, shellCmd)
 	checkError(L, err)
 
 	if exitcode != 0 {
@@ -210,7 +221,7 @@ func shOk(L *lua.LState) int {
 func shSuccess(L *lua.LState) int {
 	shellCmd := checkShellCmd(L)
 
-	errorCode, err := wait(shellCmd)
+	errorCode, err := wait(L, shellCmd)
 	checkError(L, err)
 
 	L.Push(lua.LBool(errorCode == 0))
@@ -219,7 +230,7 @@ func shSuccess(L *lua.LState) int {
 
 func shExitCode(L *lua.LState) int {
 	shellCmd := checkShellCmd(L)
-	exitcode, err := wait(shellCmd)
+	exitcode, err := wait(L, shellCmd)
 	checkError(L, err)
 	L.Push(lua.LNumber(exitcode))
 	return 1
@@ -265,12 +276,16 @@ func shPrint(L *lua.LState) int {
 		L.RaiseError("Unable to read from `%v` several times", "stdout/stderr")
 	}
 
+	if shellCmd.waitCalled {
+		L.RaiseError("Do not call `ok` or `success` before print")
+	}
+
 	combo := io.MultiReader(shellCmd.stdout, shellCmd.stderr)
 
 	_, err := io.Copy(os.Stdout, combo)
 	checkError(L, err)
 
-	err = shellCmd.command.Wait()
+	_, err = wait(L, shellCmd)
 	if err != nil && !isExitError(err) {
 		L.RaiseError("Error while waiting for command to finish: %v", err)
 	}
@@ -321,9 +336,16 @@ func isExitError(err error) bool {
 	return ok
 }
 
-func wait(shellCmd *shellCommand) (exitcode int, err error) {
+func wait(L *lua.LState, shellCmd *shellCommand) (exitcode int, err error) {
+	defer func() {
+		if abort && (err != nil || exitcode != 0) {
+			L.RaiseError("exit status %v, err: %v", exitcode, err)
+		}
+	}()
+
 	if shellCmd.command.ProcessState == nil {
 		err := shellCmd.command.Wait()
+		shellCmd.waitCalled = true
 		if err != nil && !isExitError(err) {
 			return 0, err
 		}
@@ -337,5 +359,6 @@ func wait(shellCmd *shellCommand) (exitcode int, err error) {
 		return status.ExitStatus(), nil
 	}
 
-	return 0, fmt.Errorf("`%v`: error retreiving exit code", shellCmd.command.Args)
+	err = fmt.Errorf("`%v`: error retreiving exit code", shellCmd.command.Args)
+	return 0, err
 }

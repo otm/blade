@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/yuin/gopher-lua"
@@ -109,6 +110,25 @@ func TestOK(t *testing.T) {
     print("ok")
   `
 	expected := "ok"
+	got := doString(src, t)
+
+	if got != expected {
+		t.Errorf("expected: `%v`, got: `%v`\nsrc: %v", expected, got, src)
+	}
+}
+
+func TestOKChaining(t *testing.T) {
+	src := `
+    local sh = require('sh')
+    function fail()
+      sh.echo("foo"):ok():print()
+    end
+
+    ok, err = pcall(fail)
+    print(ok)
+    print(err)
+  `
+	expected := "false" + "\n" + "<string>:4: Do not call `ok` or `success` before print"
 	got := doString(src, t)
 
 	if got != expected {
@@ -267,5 +287,103 @@ func TestWriteStderrToFile(t *testing.T) {
 	}
 	if string(dat) != expected {
 		t.Errorf("expected file: `%v`, got: `%v`\nsrc: %v", expected, string(dat), src)
+	}
+}
+
+func TestCombindedOutput(t *testing.T) {
+	src := `
+    local sh = require('sh')
+    out = sh("./stderr.test.sh"):combinedOutput()
+    print(out)
+  `
+	expected := "foo" + "\n"
+	got := doString(src, t)
+
+	if got != expected {
+		t.Errorf("expected stdout: `%v`, got: `%v`\nsrc: %v", expected, got, src)
+	}
+}
+
+func TestWriteCombindedOutputToFile(t *testing.T) {
+	src := `
+    local sh = require('sh')
+    tmp = "./remove.me"
+    out = sh("./stderr.test.sh"):combinedOutput(tmp)
+    print(out)
+  `
+	expected := "foo" + "\n"
+	file := "./remove.me"
+	defer os.Remove(file)
+	got := doString(src, t)
+
+	if got != expected {
+		t.Errorf("expected stdout: `%v`, got: `%v`\nsrc: %v", expected, got, src)
+	}
+	dat, err := ioutil.ReadFile(file)
+	if err != nil {
+		t.Errorf("unable to read file: `%v`", file)
+	}
+	if string(dat) != expected {
+		t.Errorf("expected file: `%v`, got: `%v`\nsrc: %v", expected, string(dat), src)
+	}
+}
+
+func TestSetGlobalAbort(t *testing.T) {
+	src := `
+    local sh = require('sh')
+    sh{abort=true}
+    conf = sh{}
+
+    for k, v in pairs(conf) do
+      print(k .. "=" .. tostring(v))
+    end
+    `
+	expected := "abort=true"
+	got := doString(src, t)
+
+	if got != expected {
+		t.Errorf("expected stdout: `%v`, got: `%v`\nsrc: %v", expected, got, src)
+	}
+}
+
+func TestGlobalAbort(t *testing.T) {
+	src := `
+    local sh = require('sh')
+    sh{abort=true}
+
+    function fail()
+      print("this should print")
+      sh("false"):print()
+      print("but not this")
+    end
+
+    function fail2()
+      print("this should print")
+      sh("false"):ok()
+      print("but not this")
+    end
+
+    function fail3()
+      print("this should print")
+      sh("false"):success()
+      print("but not this")
+    end
+
+    function fail4()
+      print("this should print")
+      sh("false")
+      print("and this")
+    end
+
+    ok, err = pcall(fail)
+    ok, err = pcall(fail2)
+    ok, err = pcall(fail3)
+    ok, err = pcall(fail4)
+    `
+	expected := strings.Repeat("this should print\n", 4) + "and this"
+	got := doString(src, t)
+
+	if got != expected {
+		t.Errorf("expected stdout: `%v`, got: `%v`\nsrc: %v", expected, got, src)
 	}
 }

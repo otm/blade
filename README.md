@@ -1,34 +1,58 @@
 ## Blade
-Blade is a task runner designed to be an small and easy to use task runner and a replacement when using makefiles for not intended use.
+Blade is a task runner designed to be easy, small, highly powerful, and with built in Bash completion and documentation. It is portable and easy to install, only a single binary.
 
 ## Features
-* Define tasks in lua
-* Command line parameters are passed to the task
-* Automatic generated documentation
-* Create custom help messages for build targets
-* Create custom bash completion for build targets
-* Easily run shell commands
-* Built in file watcher
 * Easy install - one binary
+* Automatic generated documentation
+* Automatic bash completion for defined tasks
+* Command line parameters are passed to the task
+* Create custom help messages for tasks with comments
+* Create custom bash completion for build targets
+* Call any program as it were a function with `sh` module
+* Built in file watcher
+* Easy and expressive as tasks are defined in Lua
+
+
+## Contents
+<!-- TOC depth:3 withLinks:1 updateOnSave:1 orderedList:0 -->
+
+	- [Blade](#blade)
+	- [Features](#features)
+	- [Contents](#contents)
+	- [Install](#install)
+	- [Bash Completion](#bash-completion)
+	- [Getting Started](#getting-started)
+	- [Targets](#targets)
+		- [target: help](#target-help)
+		- [target: <blank>](#target-blank)
+	- [Setup and teardown](#setup-and-teardown)
+		- [blade.setup(target)](#bladesetuptarget)
+		- [teardown(target)](#teardowntarget)
+	- [Shell Module](#shell-module)
+		- [Multiple arguments](#multiple-arguments)
+		- [Background Processing](#background-processing)
+		- [Capturing and Printing Output](#capturing-and-printing-output)
+		- [Piping](#piping)
+		- [Aborting Execution when Commands Fails](#aborting-execution-when-commands-fails)
+	- [Blade API](#blade-api)
+		- [blade.printStatus(message, status)](#bladeprintstatusmessage-status)
+		- [blade.help(target, message)](#bladehelptarget-message)
+		- [blade.compgen(target, optsOrFunction)](#bladecompgentarget-optsorfunction)
+	- [Plugins](#plugins)
+		- [blade.plugin.watch{callback, dir, recursive, filter, exclude}](#bladepluginwatchcallback-dir-recursive-filter-exclude)
+	- [Lua](#lua)
+		- [string:split(sep, cb) => iterator](#stringsplitsep-cb-iterator)
+	- [Build from Source](#build-from-source)
+	- [Cross Compile](#cross-compile)
+<!-- /TOC -->
 
 ## Install
-To build from source you need Go
-
-```
-go get github.com/otm/blade
-go install github.com/otm/blade
-```
-
 Pre built binaries can be downloaded at
 https://github.com/otm/blade/releases/latest
 
-## Cross Compile
-Getting blade to all your favorite platforms. Cross compiling can easily be done with gox. See https://github.com/mitchellh/gox for information about the tool. To setup and cross compile you can run.
+Download the binary and copy it in your path.
 
-```
-blade goxSetup
-blade build
-```
+If you prefer to build from source please read the section: [Build from Soruce](#build-from-source)
 
 ## Bash Completion
 The -generate-bash-conf option outputs the bash completion configuration to stdout. Either manually copy it or you can for instance use `tee`:
@@ -42,71 +66,22 @@ blade -generate-bash-conf | sudo tee /etc/bash_completion.d/blade
 **Note:** zsh can also run bash completion commands.
 
 ## Getting Started
-Create a `Bladerunner` file. All targets will be executed with the current directory set to the directory containing the `Bladerunner` file. The blade command will search for the Bladerunner file in the file tree.
+Create a `Bladefile` file in the current directory, the easiest way is to use the `blade` command.
 
-To create a `hello` target define a function on the target table. In the function you can execute arbitrary lua code.
-
-``` lua
-function target.hello()
-  print("hello world")
-end
+``` sh
+blade -init
 ```
 
-To execute the target run
+This will create a minimal `Bladefile` with one target called `demo`. Tasks in blade are called targets. To execute the target demo target run:
 
+``` sh
+blade demo
 ```
-blade hello
-```
+The demo showcases some important features:
+* Documentation of targets. Access documentation by running `blade` with no arguments.
+* Receive command line arguments
+* Execute shell commands
 
-Let's add a friendly help message to our target. That is done by creating a Lua comment on the function.
-``` lua
--- prints a "hello world" message
-function target.hello()
-  print("hello world")
-end
-```
-
-Running `blade` or `blade help` will now create the following message:
-
-```
-Usage: blade [OPTION] [<target>] [<args>]
-
-Options:
-  -comp-cwords=0: Used for bash compleation
-  -compgen=false: Used for bash compleation
-  -debug=false: Enable debug output
-  -f="": Absolute path to non default blade file
-  -generate-bash-conf=false: Generate bash completion configuration
-
-Targets:
-  hello: prints a "hello world" message
-```
-
-Lets expand the example by processing command line parameters.
-
-``` lua
--- <lua|shell> - prints a "hello world" message in Lua or Shell
-function target.hello(use)
-  use = use or "lua"
-
-  if use == "shell" then
-    blade.sh([[echo "hello world"]])
-  elseif use == "lua" then
-    print("hello world")
-  else
-    print("unknown option: " .. use)
-  end
-end
-```
-
-Run the following to test the new target
-```
-blade hello
-blade hello lua
-blade hello shell
-blade hello foo
-blade help
-```
 ## Targets
 Defining new blade targets is done by adding functions to the target table.
 
@@ -179,76 +154,106 @@ function blade.teardown(target)
 end
 ```
 
+## Shell Module
+sh is a interface to call any program as it were a function. Programs are executed asynchronously to enable streaming of data in pipes. Therefor it is necessary to manually wait on programs.
+
+``` lua
+local sh = require("sh")
+
+sh.echo("hello", "world"):print()
+```
+
+Output:
+```
+hello world
+```
+
+For commands with exotic names or names which are reserved words call `sh` directly.
+``` lua
+sh(./script-in-my-directory)
+```
+### Multiple arguments
+Commands that take multiple arguments needs to be invoked with separate strings for each arguments. That is, `sh.tar("xzf", "test.tar")` will work; however, `sh.tar("xzf test.tar")` will not.
+
+### Background Processing
+By default all commands are executed in the background.
+``` lua
+-- non blocking
+sh.sleep(3)
+print("prints immediately")
+
+-- block
+sh.sleep(3):success()
+print("...3 seconds later")
+
+-- utilizing async
+sleep = sh.sleep(3)
+print("prints immediately")
+sleep.success()
+print("...3 seconds later")
+```
+
+### Capturing and Printing Output
+
+#### print()
+`print()` prints the command's combined output.
+
+``` lua
+-- print output of command
+sh.echo("hello world"):print()
+```
+
+***Note:*** `print()` has to be called before any method that waits. For instance: `ok()`, `success()`, or `exitcode()`,
+
+#### stdout([filename]), stderr([filename]), combinedOutput([filename])
+All these three methods takes an optional filename argument. If the filename is omitted the function returns the output of the command.
+
+If `filename` is given the output will be written to the file and returned.
+``` lua
+-- print output of command
+output = sh.echo("hello world"):combinedOutput("/tmp/output")
+print(output)
+```
+
+The example above will print `hello world` and it will write it to `/tmp/output`
+
+### Piping
+Bash like piping is done by calling methods on the previous commands.
+``` lua
+sh.du("-sb"):sort("-rn"):print()
+```
+
+### Aborting Execution when Commands Fails
+There are several ways to wait for a command.
+
+#### ok()
+Waits for the command to finish and aborts execution if the command returns a non zero exit code. Example: `sh.ls():ok()`
+
+#### success()
+Returns true if the exit code of the command is zero, false otherwise. Example: `sh.ls():success()`
+
+#### exitcode()
+To access the exit code of a command call the method `exitcode()`. Example:
+`sh.ls():exitcode()`
 
 ## Blade API
 A small set of convince functions are provided, attached to a lua table called `blade`.
-
-### blade.shell(shell) => shell
-The default shell used is bash, setting the `blade.shell` variable overrides that.
-
-***Example:***
-``` lua
-sh = blade.shell("zsh")
-print(sh)
--- prints 'zsh'
-```
-
-### blade.sh(command) => exitStatus, stdout, stderr
-Run arbitrary shell commands, executed in bash by default. If the command returns a non zero exit code the target execution will be aborted. The command is echoed to stdout, to suppress this use `blade._sh` instead.
-
-Returns the exit status and the standard output from the command
-
-***Example:***
-``` lua
-exitStatus, out = blade.sh("echo 'Hello World'")
--- outputs:
--- echo 'Hello World'
--- Hello World
-
-exitStatus, out = blade._sh("echo 'Hello World'")
--- outputs:
--- Helo World
-```
-
-### blade.exec(command) => exitStatus, stdout, stderr
-`runner.exec`, does not abort target execution if the command returns a non zero exit code. `runner._exec` will suppress the command echo to stdout.
-
-***Example:***
-``` lua
-blade.exec("false'")
-print("command execution continues")
-
-blade._exec("false")
-print("commnd is not echoed to stdout, execution continues")
-
-blade.sh("false")
-print("This is not executed")
-```
-
-### blade.system(command) => exitStatus, stdout, stderr
-Like `blade.sh` but does not check anything, or echo anything.
-
-***Example:***
-``` lua
-code, out, err = blade.system("echo 'Hello World' && date -r")
-print("code:", code)
-print("stdout:", out)
-print("stderr", err)
-```
 
 ### blade.printStatus(message, status)
 Prints a pretty printed status message to the terminal, normaly used for printing execution status.
 
 ***Example:***
 ``` lua
+local sh = require("sh")
+
 blade.printStatus("true", true)
 blade.printStatus("false", false)
 blade.printStatus("0", 0)
 blade.printStatus("1", 1)
 blade.printStatus("nil")
-blade.printStatus("true (shell)", blade._exec("true"))
-blade.printStatus("false (shell)", blade._exec("false"))
--- outputs
+blade.printStatus("true (shell)", sh.date():success())
+blade.printStatus("false (shell)", sh("false"):success())
+-- outputs:
 -- true                                                                  [ ok ]
 -- false                                                                 [fail]
 -- 0                                                                     [ ok ]
@@ -351,4 +356,23 @@ end
 out:split("\n", function(line)
   print("cb", line)
 end)
+```
+
+## Build from Source
+To build from source you need a working Go installation, see https://golang.org/doc/install
+
+```
+go get github.com/otm/blade
+go install github.com/otm/blade
+```
+
+Pre built binaries can be downloaded at
+https://github.com/otm/blade/releases/latest
+
+## Cross Compile
+Getting blade to all your favorite platforms. Cross compiling can easily be done with gox. See https://github.com/mitchellh/gox for information about the tool. To setup and cross compile you can run.
+
+```
+blade goxSetup
+blade build
 ```

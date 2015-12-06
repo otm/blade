@@ -52,30 +52,7 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	decorateStringLib(L)
 
 	// Search for Bladerunner file
-	filename := "Bladerunner"
-	if flg.bladefile != "" {
-		filename = flg.bladefile
-	}
-
-	for {
-		wd, _ := os.Getwd()
-		emit("Looking for blade file: %v", wd)
-		if _, err := os.Stat(filename); err == nil {
-			emit("Found blade file: %v", filename)
-			break
-		}
-
-		if wd == "/" {
-			if flg.compgen {
-				emit("fatal: No blade file (or in any parent directory): %v\n", filename)
-			} else {
-				fmt.Printf("fatal: No blade file (or in any parent directory): %v\n", filename)
-			}
-			os.Exit(1)
-		}
-
-		os.Chdir("..")
-	}
+	filename := findBladefile(flg.bladefile)
 
 	emit("Parsing blade file\n")
 	if err := L.DoFile(filename); err != nil {
@@ -121,6 +98,37 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	subcommands.validate()
 
 	return L, blade, cmds
+}
+
+func findBladefile(filename string) string {
+	files := []string{"Bladerunner", "Bladefile"}
+	if filename != "" {
+		files = []string{flg.bladefile}
+	}
+
+	// Walk the file tree towards the root
+	for {
+		wd, _ := os.Getwd()
+		emit("Looking for blade file: %v", wd)
+		for _, file := range files {
+			emit(" - checking: %v", file)
+			if _, err := os.Stat(file); err == nil {
+				emit("Found blade file: %v", file)
+				return file
+			}
+		}
+
+		if wd == "/" {
+			if flg.compgen {
+				emit("fatal: No blade file (or in any parent directory): %v\n", files)
+			} else {
+				fmt.Printf("fatal: No blade file (or in any parent directory): %v\n", files)
+			}
+			os.Exit(1)
+		}
+
+		os.Chdir("..")
+	}
 }
 
 func runLFunc(L *lua.LState, tbl *lua.LTable, fn string, args ...lua.LValue) error {

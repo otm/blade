@@ -1,15 +1,21 @@
+sh = require("sh")
+
 -- The setup function is run before any other target
 function blade.setup(target)
-	-- if target is empty string blade is going to run the default target
-	if target == "" then
-		target = "<default>"
+	if target == "setup" then
+		print("setup: Executed before target")
 	end
-	print(string.format(">> setup: %s <<", target))
 end
 
 -- The teardown function is run after the blade target
 function blade.teardown(target)
-	print(string.format(">> teardown: %s <<", target))
+	if target ~= "setup" then return end
+	print("teardown: executed after target")
+end
+
+-- utilize setup and teardown functionality
+function target.setup()
+	print("Example on using setup/teardown")
 end
 
 -- By defining a blade.default function we can run an action if the
@@ -18,10 +24,17 @@ end
 
 -- display HOME environment variable
 function blade.default()
-	print("======= default =======")
-	print("ENV: ", os.getenv("HOME"))
+	print("Example on overriding `blade.default`")
+end
+
+-- read the HOME environment variable
+function target.environment()
+	print("========= ENV =========")
+	print("HOME: ", os.getenv("HOME"))
 	print("=======================")
 end
+
+
 
 -- Define a "watch" target and setup the watcher
 -- callback can be a closure or a reference to a function
@@ -48,7 +61,7 @@ function target.hello(use)
 	use = use or "lua"
 
   if use == "shell" then
-		blade.sh([[echo "hello world"]])
+		sh.echo("hello world"):print()
   elseif use == "lua" then
     print("hello world")
   else
@@ -80,13 +93,21 @@ function target.printStatus()
   blade.printStatus("0", 0)
   blade.printStatus("1", 1)
   blade.printStatus("nil")
-	blade.printStatus("true (shell)", blade._exec("true"))
-	blade.printStatus("false (shell)", blade._exec("false"))
+	blade.printStatus("true (shell)", sh("true"):success())
+	blade.printStatus("false (shell)", sh("false"):success())
 end
 
 -- showcase automatic command abort when shell command returns non-zero exit code
 function target.fail()
+	sh.echo("Commands that execute successfully are ok"):print():ok()
 
+	sh.echo("However, the script will abort if we execute a command that fails")
+	sh("false"):ok()
+
+	sh.echo("So this is never printend"):print()
+end
+
+function target.foo()
   -- capture exit status and command output
   exitStatus, out = blade.sh("echo 'Blade runner'")
   print("Exit: " .. exitStatus .. ", Output: ".. out)
@@ -106,19 +127,46 @@ end
 
 -- files lists all Go files in the directory
 function target.files()
-	for file in io.popen("ls -1 *.go"):lines() do
+	-- list with grep (globing files does not work)
+	for file in sh.ls():grep(".go"):lines() do
 		print("File:", file)
 	end
+
+	print("\n-------\n")
+
+	-- however we can evaluate it in the shell
+	for file in sh.sh("-c", "ls *.go"):lines() do
+		print("File:", file)
+	end
+
 end
 
 -- showcase how to split strings
 function target.split()
 	out = "first\nsecond"
+
+	print("Split line with iterator:")
 	for line in out:split("\n") do
 		print("i", line)
 	end
 
+	print("\nSplit line with callback:")
 	out:split("\n", function(line)
 		print("cb", line)
 	end)
+
+	-- this can be done on commands directly
+	print("\nIterate lines on shell command:")
+	for line in sh.ls():lines() do
+		print("sh", line)
+	end
+end
+
+-- iterate columns, execute ps and returns CMD
+function target.columns()
+	-- this can be done on commands directly
+	print("\nIterate lines and column on shell command:")
+	for line in sh.ps():lines() do
+		print(line:c(4))
+	end
 end
