@@ -28,12 +28,20 @@ function target.release(version, name, description)
 	end
 end
 
-blade.compgen(target.release, function(compWords, compCWord)
-	if compCWord == 1 then
-		code, out = blade._sh("git tag")
-		return out
-	end
+blade.flag(target.release, function(flag)
+	flag:string("version", "version", "The version to release", function()
+		return sh.git("tag"):stdout()
+	end)
+	flag:string("name", "", "The name of the release")
+	flag:string("description", "", "The description of the release")
 end)
+
+-- blade.compgen(target.release, function(compWords, compCWord)
+-- 	if compCWord == 1 then
+-- 		code, out = blade._sh("git tag")
+-- 		return out
+-- 	end
+-- end)
 
 --clean working directory of builds
 function target.clean()

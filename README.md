@@ -1,19 +1,49 @@
 ## Blade
 Blade is a task runner designed to be easy, small, highly powerful, and with built in Bash completion and documentation. It is portable and easy to install, only a single binary.
 
+![Blade](/docs/blade-logo.png)
+
+
 ## Features
 * Easy install - one binary
-* Automatic generated documentation
+* Automatic generation of documentation
 * Automatic bash completion for defined tasks
 * Command line parameters are passed to the task
 * Create custom help messages for tasks with comments
-* Create custom bash completion for build targets
-* Call any program as it were a function with `sh` module
+* Create custom bash completion for tasks
+* Call any command as it was a function with the `sh` module
 * Built in file watcher
 * Easy and expressive as tasks are defined in Lua
 
+# Example
+Below a task called `build` is created, and the comment to the function will be
+visible when running `blade` with no arguments.
 
-## Contents
+```lua
+local sh = require("sh")
+
+-- run tests and build
+function target.build(version)
+	dst = "blade"
+
+	if version then
+		dst = string.format("%s-%s", dst, version)
+	end
+
+	sh.go("test", "./..."):ok()
+	sh.go("build", "-o", dst):ok()
+
+	print("Build finished")
+end
+```
+
+For more examples see `Bladefile.example`. To run an example either rename the file or override the default blade file with `-f`
+
+```shell
+blade -f Bladefile.example help
+```
+
+## Table of Contents
 <!-- TOC depth:3 withLinks:1 updateOnSave:0 orderedList:0 -->
 
 - [Blade](#blade)
@@ -158,84 +188,27 @@ end
 ## Shell Module
 sh is a interface to call any program as it were a function. Programs are executed asynchronously to enable streaming of data in pipes. Therefor it is necessary to manually wait on programs.
 
+Full documentation can be found at: http://github.com/otm/gluash
+
 ``` lua
 local sh = require("sh")
 
 sh.echo("hello", "world"):print()
 ```
 
-Output:
-```
-hello world
-```
-
 For commands with exotic names or names which are reserved words call `sh` directly.
 ``` lua
-sh(./script-in-my-directory)
+sh("/path/to/script", "argument")
 ```
 ### Multiple arguments
 Commands that take multiple arguments needs to be invoked with separate strings for each arguments. That is, `sh.tar("xzf", "test.tar")` will work; however, `sh.tar("xzf test.tar")` will not.
 
-### Background Processing
-By default all commands are executed in the background.
-``` lua
--- non blocking
-sh.sleep(3)
-print("prints immediately")
+### Pipes
+Pipes are done in very much like in a normal shell. Just call the command as method on the previous and a pipe will be created between them.
 
--- block
-sh.sleep(3):success()
-print("...3 seconds later")
-
--- utilizing async
-sleep = sh.sleep(3)
-print("prints immediately")
-sleep.success()
-print("...3 seconds later")
+```lua
+sh.cat("/etc/hosts"):grep("root"):print()
 ```
-
-### Capturing and Printing Output
-
-#### print()
-`print()` prints the command's combined output.
-
-``` lua
--- print output of command
-sh.echo("hello world"):print()
-```
-
-***Note:*** `print()` has to be called before any method that waits. For instance: `ok()`, `success()`, or `exitcode()`,
-
-#### stdout([filename]), stderr([filename]), combinedOutput([filename])
-All these three methods takes an optional filename argument. If the filename is omitted the function returns the output of the command.
-
-If `filename` is given the output will be written to the file and returned.
-``` lua
--- print output of command
-output = sh.echo("hello world"):combinedOutput("/tmp/output")
-print(output)
-```
-
-The example above will print `hello world` and it will write it to `/tmp/output`
-
-### Piping
-Bash like piping is done by calling methods on the previous commands.
-``` lua
-sh.du("-sb"):sort("-rn"):print()
-```
-
-### Aborting Execution when Commands Fails
-There are several ways to wait for a command.
-
-#### ok()
-Waits for the command to finish and aborts execution if the command returns a non zero exit code. Example: `sh.ls():ok()`
-
-#### success()
-Returns true if the exit code of the command is zero, false otherwise. Example: `sh.ls():success()`
-
-#### exitcode()
-To access the exit code of a command call the method `exitcode()`. Example:
-`sh.ls():exitcode()`
 
 ## Blade API
 A small set of convince functions are provided, attached to a lua table called `blade`.
@@ -332,6 +305,7 @@ end
 ## Lua
 This section contains some Lua tips for new users
 
+### General Tips
 * Define strings: `"str"`, `'str'` or `[[str]]`
 * Read environment variables: `os.getenv("HOME")`
 * if-else: `if <statement> then <code> elseif <statement> then <code> else <code> end`
@@ -347,7 +321,6 @@ end
 ### string:split(sep, cb) => iterator
 Splitting strings can be done in many ways in Lua but they are all quite cumbersome. To aid this there is a non standard Lua function for splitting strings in blade
 
-Example:
 ``` lua
 out = "first\nsecond"
 for line in out:split("\n") do
@@ -357,6 +330,32 @@ end
 out:split("\n", function(line)
   print("cb", line)
 end)
+```
+
+### string:c(n)
+Extracts the n:th field separated by whitespace from a string.
+
+```lua
+line = "foo bar baz"
+print(line:c(2))  -- prints "bar"
+```
+
+### string:fields()
+Returns an iterator splitting the string by whitespace. Note, newline is considered a whitespace.
+
+``` lua
+line = "foo bar baz"
+for word in line:fields() do
+  print(line)
+end
+```
+
+### string:trim([cutset])
+Trim the string using the cutset, if cutset is omitted it defaults to space and newline.
+
+``` lua
+line = "  foo \n  "
+print(line:trim())  -- prints `foo`
 ```
 
 ## Build from Source

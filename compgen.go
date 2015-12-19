@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/otm/gluaflag"
 	"github.com/yuin/gopher-lua"
 )
 
@@ -85,7 +86,7 @@ func compgen() {
 	}
 
 	// setup Lua environment
-	L, _, _ := setupEnv()
+	L, _, _ := setupEnv(flg.src)
 
 	// analyse runner targets
 	if flg.compCWords == index {
@@ -104,6 +105,25 @@ func compgen() {
 	target := args[0]
 	if cmd, ok := subcommands[target]; ok && cmd.compgen != nil {
 		fmt.Printf("%v", cmd.compgen.compgen(L, args, flg.compCWords-index))
+	}
+
+	// pass it to the runner flag target
+	if fn := subcommands[target].flagFn; fn != nil {
+		_ = require(L, "flag").(*lua.LTable)
+		ud := gluaflag.New(L)
+
+		if err := L.CallByParam(lua.P{
+			Fn:      fn,
+			NRet:    0,
+			Protect: true,
+		}, ud); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+
+		if gf, ok := ud.Value.(*gluaflag.Gluaflag); ok {
+			fmt.Print(gf.Compgen(L, flg.compCWords-index, args))
+		}
 	}
 
 }

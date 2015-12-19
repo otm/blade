@@ -5,14 +5,15 @@ import (
 	"os"
 
 	"github.com/otm/blade/parser"
-	"github.com/otm/blade/sh"
+	"github.com/otm/gluaflag"
+	"github.com/otm/gluash"
 	"github.com/yuin/gopher-lua"
 )
 
 // LPrintHelp prints the help message
 var LPrintHelp *lua.LFunction
 
-func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
+func setupEnv(src string) (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	emit("Setting up environment\n")
 	L = lua.NewState()
 	defer L.Close()
@@ -33,6 +34,7 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	blade.RawSetString("shell", L.NewFunction(SetShell))
 	blade.RawSetString("printStatus", L.NewFunction(printStatus))
 	blade.RawSetString("compgen", L.NewFunction(Compgen))
+	blade.RawSetString("flag", L.NewFunction(NewFlag))
 	blade.RawSetString("help", L.NewFunction(Help))
 	blade.RawSetString("setup", L.NewFunction(func(L *lua.LState) int { return 0 }))
 	blade.RawSetString("teardown", L.NewFunction(func(L *lua.LState) int { return 0 }))
@@ -41,7 +43,10 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	L.SetGlobal("blade", blade)
 
 	emit("Preloading module: sh")
-	L.PreloadModule("sh", sh.Loader)
+	L.PreloadModule("sh", gluash.Loader)
+
+	emit("Preloading module: flag")
+	L.PreloadModule("flag", gluaflag.Loader)
 
 	emit("Setting up cmd\n")
 	cmds := L.NewTable()
@@ -53,17 +58,30 @@ func setupEnv() (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 
 	// Search for Bladerunner file
 	filename := findBladefile(flg.bladefile)
+	var comments parser.Comments
+	var err error
 
-	emit("Parsing blade file\n")
-	if err := L.DoFile(filename); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	if src == "" {
+		emit("Parsing blade file\n")
+		if err := L.DoFile(filename); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
 
-	emit("Parsing comments")
-	comments, err := parser.File(filename)
-	if err != nil {
-		emitFatal("%v", err)
+		emit("Parsing comments")
+		comments, err = parser.File(filename)
+		if err != nil {
+			emitFatal("%v", err)
+		}
+	} else {
+		emit("Parsing blade string\n")
+		if err := L.DoString(src); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+
+		emit("Parsing comments")
+		comments = parser.String(src)
 	}
 
 	emit("Registring blade targets:\n")
@@ -175,9 +193,45 @@ func lookupLFunc(L *lua.LState, tbl *lua.LTable, key string) error {
 	return nil
 }
 
+func require(L *lua.LState, module string) lua.LValue {
+	fn := L.GetGlobal("require").(*lua.LFunction)
+
+	if err := L.CallByParam(lua.P{
+		Fn:      fn,
+		NRet:    1,
+		Protect: true,
+	}, lua.LString(module)); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	res := L.Get(-1)
+	L.Pop(1)
+	return res
+}
+
 func customTarget(L *lua.LState, cmds *lua.LTable, target string, args []string) error {
 	emit("Running target: %v", target)
 	currentTarget = target
+
+	if fn := subcommands[currentTarget].flagFn; fn != nil {
+		_ = require(L, "flag").(*lua.LTable)
+		ud := gluaflag.New(L)
+
+		if err := L.CallByParam(lua.P{
+			Fn:      fn,
+			NRet:    0,
+			Protect: true,
+		}, ud); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+
+		t, err := gluaflag.Parse(L, ud, args)
+		if err != nil {
+			return err
+		}
+		return runLFunc(L, cmds, target, t)
+	}
 
 	// preparing variables to function
 	var lvArgs []lua.LValue
