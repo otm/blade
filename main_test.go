@@ -11,6 +11,18 @@ import (
 
 var origArgs = os.Args
 
+func reset() {
+	flg.compCWords = 0
+	flg.debug = false
+	flg.compgen = false
+	flg.bladefile = ""
+	flg.genBashConf = false
+	flg.init = false
+	flg.src = ""
+
+	subcommands = make(targets)
+}
+
 func captureStdOut() func() string {
 	old := os.Stdout // keep backup of the real stdout
 	r, w, _ := os.Pipe()
@@ -52,6 +64,7 @@ func captureStderr() func() string {
 }
 
 func doString(t *testing.T, src string, args ...string) (stdout, stderr string) {
+	reset()
 	os.Args = origArgs
 	os.Args = append(os.Args, "-c", src)
 	os.Args = append(os.Args, args...)
@@ -198,7 +211,7 @@ func TestFailFlags(t *testing.T) {
 	expected := ""
 	expectedStderr := strings.Join([]string{
 		"flag provided but not defined: -foo",
-		"Usage:",
+		"Usage of fooer:",
 		"  -name string",
 		"    	How to foo (default \"John Dow\")",
 		"",
@@ -223,6 +236,81 @@ func TestFlagsCompgen(t *testing.T) {
 	expected := "fi fi fo fum"
 	expectedStderr := strings.Join([]string{""}, "\n")
 	got, stderr := doString(t, src, "-compgen", "-comp-cwords", "3", "blade", "fooer", "-name")
+	check(t, expected, got, src)
+	check(t, expectedStderr, stderr, src)
+}
+
+func TestCompgenOnNonExistingTarget(t *testing.T) {
+	src := `
+		function target.fooer(flags)
+			print("foo " .. flags.name)
+    end
+
+		blade.flag(target.fooer, function(flag)
+			flag:string("name", "John Dow", "How to foo", function()
+				return "fi fi fo fum"
+			end)
+		end)
+  `
+	expected := ""
+	expectedStderr := strings.Join([]string{""}, "\n")
+	got, stderr := doString(t, src, "-compgen", "-comp-cwords", "2", "blade", "bar")
+	check(t, expected, got, src)
+	check(t, expectedStderr, stderr, src)
+}
+
+func TestCompgenOnHelpTarget(t *testing.T) {
+	src := `
+		function target.fooer(flags)
+			print("foo " .. flags.name)
+		end
+
+		function target.barer(flags)
+			print("foo " .. flags.name)
+		end
+
+		blade.flag(target.fooer, function(flag)
+			flag:string("name", "John Dow", "How to foo", function()
+				return "fi fi fo fum"
+			end)
+		end)
+	`
+	expected := "fooer barer"
+	expectedStderr := strings.Join([]string{""}, "\n")
+	got, stderr := doString(t, src, "-compgen", "-comp-cwords", "2", "blade", "help")
+	check(t, expected, got, src)
+	check(t, expectedStderr, stderr, src)
+}
+
+func TestSubcommandHelp(t *testing.T) {
+	src := `
+		-- Help string for fooer
+		function target.fooer(flags)
+			print("foo " .. flags.name)
+    end
+
+		blade.flag(target.fooer, function(flag)
+			flag:string("name", "John Dow", "How to foo", function()
+				return "fi fi fo fum"
+			end)
+			flag:stringArg("title", 1, "Title help text")
+		end)
+  `
+	expected := strings.Join([]string{
+		"Usage: blade fooer [options] title ",
+		"",
+		"Help string for fooer",
+		"",
+		"Flags:",
+		"  -name string",
+		"    	How to foo (default \"John Dow\")",
+		"",
+		"Arguments:",
+		"  title string",
+		"    	Title help text",
+	}, "\n")
+	expectedStderr := strings.Join([]string{""}, "\n")
+	got, stderr := doString(t, src, "help", "fooer")
 	check(t, expected, got, src)
 	check(t, expectedStderr, stderr, src)
 }

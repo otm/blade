@@ -24,7 +24,7 @@ func (c Comments) Get(row int) (*Comment, error) {
 		if c[i].Row != row {
 			continue
 		}
-		result.Value = result.Value + c[i].Value
+		result.Value = c[i].Value + "\n" + result.Value
 		row--
 	}
 

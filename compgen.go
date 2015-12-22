@@ -90,6 +90,25 @@ func compgen() {
 
 	// analyse runner targets
 	if flg.compCWords == index {
+		s := []string{"help"}
+		for target := range subcommands {
+			if target == "" {
+				continue
+			}
+			s = append(s, target)
+		}
+		fmt.Printf("%v", strings.Join(s, " "))
+		return
+	}
+
+	// Dont segfault
+	if len(args) == 0 {
+		return
+	}
+
+	target := args[0]
+
+	if target == "help" {
 		var s []string
 		for target := range subcommands {
 			if target == "" {
@@ -102,15 +121,19 @@ func compgen() {
 	}
 
 	// pass it on to the runner target
-	target := args[0]
 	if cmd, ok := subcommands[target]; ok && cmd.compgen != nil {
 		fmt.Printf("%v", cmd.compgen.compgen(L, args, flg.compCWords-index))
+	}
+
+	// check if subtarget exists
+	if _, ok := subcommands[target]; !ok {
+		return
 	}
 
 	// pass it to the runner flag target
 	if fn := subcommands[target].flagFn; fn != nil {
 		_ = require(L, "flag").(*lua.LTable)
-		ud := gluaflag.New(L)
+		ud := gluaflag.New(target, L)
 
 		if err := L.CallByParam(lua.P{
 			Fn:      fn,
@@ -121,7 +144,7 @@ func compgen() {
 			os.Exit(1)
 		}
 
-		if gf, ok := ud.Value.(*gluaflag.Gluaflag); ok {
+		if gf, ok := ud.Value.(*gluaflag.FlagSet); ok {
 			fmt.Print(gf.Compgen(L, flg.compCWords-index, args))
 		}
 	}

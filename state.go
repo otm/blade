@@ -215,7 +215,7 @@ func customTarget(L *lua.LState, cmds *lua.LTable, target string, args []string)
 
 	if fn := subcommands[currentTarget].flagFn; fn != nil {
 		_ = require(L, "flag").(*lua.LTable)
-		ud := gluaflag.New(L)
+		ud := gluaflag.New(currentTarget, L)
 
 		if err := L.CallByParam(lua.P{
 			Fn:      fn,
