@@ -61,7 +61,7 @@ func printFlags() {
 	flag.VisitAll(func(fl *flag.Flag) {
 		s = append(s, "-"+fl.Name)
 	})
-	fmt.Printf("%v", strings.Join(s, " "))
+	fmt.Printf("%v", strings.Join(s, "\n"))
 }
 
 func compgen() {
@@ -97,7 +97,7 @@ func compgen() {
 			}
 			s = append(s, target)
 		}
-		fmt.Printf("%v", strings.Join(s, " "))
+		fmt.Printf("%v", strings.Join(s, "\n"))
 		return
 	}
 
@@ -116,7 +116,7 @@ func compgen() {
 			}
 			s = append(s, target)
 		}
-		fmt.Printf("%v", strings.Join(s, " "))
+		fmt.Printf("%v", strings.Join(s, "\n"))
 		return
 	}
 
@@ -155,7 +155,7 @@ func compgen() {
 func generateBashConfig() {
 	conf := `_blade()
 {
-    local cur prev opts
+    local cur prev opts old_ifs
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -172,8 +172,12 @@ func generateBashConfig() {
     flags=$(echo "${COMP_WORDS[@]}")
     flag=$(expr "${flags}" : '.*\(-f [^ ]* *\)')
 
+    old_ifs=$IFS
+    IFS=$'\n'
     opts=$(blade $flag -compgen -comp-cwords $COMP_CWORD ${COMP_WORDS[@]})
     COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    type compopt >&/dev/null && compopt -o filenames 2> /dev/null || compgen -f /non-existing-dir/ > /dev/null
+    IFS=$old_ifs
     return 0
 }
 complete -F _blade blade

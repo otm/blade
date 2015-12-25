@@ -77,7 +77,7 @@ end)
 -- Adding a help message to the "hello" target, overriding the comment on the target function
 blade.help(target.hello, "<lua|shell>")
 
--- showcase how to read on all command line parameters
+-- showcase how to read all command line parameters
 function target.glob(...)
 	print("Number of inputs: ", arg.n)
   for k, v in ipairs(arg) do
@@ -170,3 +170,20 @@ function target.columns()
 		print(line:c(4))
 	end
 end
+
+-- Showcase how to use flags and bash completion
+function target.flags(flag)
+	for k,v in pairs(flag) do
+		print(k,v)
+	end
+end
+
+blade.flag(target.flags, function(flag)
+	flag.int("build", 0, "The build to release", function()
+		return "1 2 3 4 5 6"
+	end)
+
+	flag.string("folder", "", "The folder to release from", function(arg)
+		sh.ls(sh.dirname(arg):stdout()):print()
+	end)
+end)
