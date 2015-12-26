@@ -1,3 +1,5 @@
-blade*
-~Bladefile*
+blade
+blade-*
 runner
+!Bladefile
+!Bladefile.example

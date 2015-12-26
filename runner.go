@@ -200,9 +200,9 @@ func main() {
 		err = customTarget(L, cmd, target, flag.Args()[1:])
 		if err != nil {
 			// TODO: Make error message look nicer
-			emitErr("%v\n\n", err)
+			// emitErr("%v\n\n", err)
 			printSubcommandHelp(target, L)
-			os.Exit(1)
+			return
 		}
 		wait(done)
 		return

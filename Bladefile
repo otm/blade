@@ -74,7 +74,6 @@ end
 
 -- Showcase how to use flags and bash completion
 function target.flags(flag)
-	print("foooooo")
 	for k,v in pairs(flag) do
 		print(k,v)
 	end
@@ -86,14 +85,14 @@ blade.flag(target.flags, function(flag)
 	end)
 
 	flag:string("folder", "", "The folder to release from", function(arg)
-		function foo(...)
-			return arg
-		end
-
 		return sh.glob(arg .. "*")
 	end)
 
 	flag:stringArg("name", 1, "Your name", function(arg)
 		return "hej", "foo", "fim"
+	end)
+
+	flag:string("tag" ,"", "Git tag to set", function(arg)
+		return sh.git("tag"):stdout()
 	end)
 end)

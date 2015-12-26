@@ -275,7 +275,7 @@ func TestCompgenOnHelpTarget(t *testing.T) {
 			end)
 		end)
 	`
-	expected := "fooer barer"
+	expected := "fooer\nbarer"
 	expectedStderr := strings.Join([]string{""}, "\n")
 	got, stderr := doString(t, src, "-compgen", "-comp-cwords", "2", "blade", "help")
 	check(t, expected, got, src)

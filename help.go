@@ -58,7 +58,7 @@ func printSubcommandHelp(target string, L *lua.LState) int {
 	// Check if we have a flag function, and run it
 	if fn := subcommands[target].flagFn; fn != nil {
 		_ = require(L, "flag").(*lua.LTable)
-		ud := gluaflag.New(target, L)
+		ud := gluaflag.New(L, target)
 
 		if err := L.CallByParam(lua.P{
 			Fn:      fn,

@@ -30,7 +30,7 @@ func (sc *funcCompgen) compgen(L *lua.LState, compWords []string, compCWords int
 		Protect: true,
 	}, tbl, lua.LNumber(compCWords)); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+		return ""
 	}
 
 	ret := L.Get(-1)
@@ -140,7 +140,7 @@ func compgen() {
 	// pass it to the runner flag target
 	if fn := subcommands[target].flagFn; fn != nil {
 		_ = require(L, "flag").(*lua.LTable)
-		ud := gluaflag.New(target, L)
+		ud := gluaflag.New(L, target)
 
 		if err := L.CallByParam(lua.P{
 			Fn:      fn,
