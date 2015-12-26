@@ -74,6 +74,7 @@ end
 
 -- Showcase how to use flags and bash completion
 function target.flags(flag)
+	print("foooooo")
 	for k,v in pairs(flag) do
 		print(k,v)
 	end
@@ -89,7 +90,7 @@ blade.flag(target.flags, function(flag)
 			return arg
 		end
 
-		return foo(sh.glob(arg .. "*"))
+		return sh.glob(arg .. "*")
 	end)
 
 	flag:stringArg("name", 1, "Your name", function(arg)

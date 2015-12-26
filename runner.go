@@ -194,10 +194,16 @@ func main() {
 	if flag.NArg() > 0 {
 		err := lookupLFunc(L, cmd, target)
 		if err != nil {
-			emitFatal("%v", err)
+			emitFatal("%v\n", err)
 		}
 
-		customTarget(L, cmd, target, flag.Args()[1:])
+		err = customTarget(L, cmd, target, flag.Args()[1:])
+		if err != nil {
+			// TODO: Make error message look nicer
+			emitErr("%v\n\n", err)
+			printSubcommandHelp(target, L)
+			os.Exit(1)
+		}
 		wait(done)
 		return
 	}
