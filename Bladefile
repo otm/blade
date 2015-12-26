@@ -81,45 +81,18 @@ end
 
 blade.flag(target.flags, function(flag)
 	flag:int("build", 0, "The build to release", function()
-		return table.concat({1,2,3,4,5,6}, "\n")
+		return 1,2,3,4,5,6
 	end)
 
 	flag:string("folder", "", "The folder to release from", function(arg)
-		-- local name = arg
-		-- local dot = ""
-		-- if string.match(name, [[.*%.%.$]]) then
-		-- 	dot = " .."
-		-- elseif string.match(name, [[.*%.$]]) then
-		-- 	dot = " . .."
-		-- end
-		--
-		-- if name:match("^/.*/.*") then
-		-- 	name = string.gsub(name, "(.*/)(.*)", "%1")
-		-- 	name = name:sub(1, -2)
-		-- elseif name:match("^/.*") then
-		-- 	name = "/"
-		-- elseif name:match(".-/.-") then
-		-- 	name = string.gsub(name, "(.*/)(.*)", "%1")
-		-- 	name = name:sub(1, -2)
-		-- else
-		-- 	name = "."
-		-- end
-		--
-		-- files = sh.find(name, "-depth", 1):sed("-e", [[s/^\.\///]]):stdout()
-		-- files = files .. dot
-
 		function foo(...)
 			return arg
 		end
 
-		return table.concat(foo(sh.glob(arg .. "*")), "\n")
+		return foo(sh.glob(arg .. "*"))
+	end)
+
+	flag:stringArg("name", 1, "Your name", function(arg)
+		return "hej", "foo", "fim"
 	end)
 end)
-
-function target.test(args)
-	function foo(...)
-		return arg
-	end
-
-	print(table.concat(foo(sh.glob(args .. "*")), "\n"))
-end

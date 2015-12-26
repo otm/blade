@@ -61,7 +61,11 @@ func printFlags() {
 	flag.VisitAll(func(fl *flag.Flag) {
 		s = append(s, "-"+fl.Name)
 	})
-	fmt.Printf("%v", strings.Join(s, "\n"))
+	printOptions(s)
+}
+
+func printOptions(opts []string) {
+	fmt.Printf("%v", strings.Join(opts, "\n"))
 }
 
 func compgen() {
@@ -97,7 +101,8 @@ func compgen() {
 			}
 			s = append(s, target)
 		}
-		fmt.Printf("%v", strings.Join(s, "\n"))
+
+		printOptions(s)
 		return
 	}
 
@@ -116,12 +121,14 @@ func compgen() {
 			}
 			s = append(s, target)
 		}
-		fmt.Printf("%v", strings.Join(s, "\n"))
+
+		printOptions(s)
 		return
 	}
 
 	// pass it on to the runner target
 	if cmd, ok := subcommands[target]; ok && cmd.compgen != nil {
+		// TODO: compgen should return a []string insted of a string
 		fmt.Printf("%v", cmd.compgen.compgen(L, args, flg.compCWords-index))
 	}
 
@@ -145,7 +152,7 @@ func compgen() {
 		}
 
 		if gf, ok := ud.Value.(*gluaflag.FlagSet); ok {
-			fmt.Print(gf.Compgen(L, flg.compCWords-index, args))
+			printOptions(gf.Compgen(L, flg.compCWords-index, args))
 		}
 	}
 
