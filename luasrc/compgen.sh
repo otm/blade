@@ -1,18 +1,4 @@
-package luasrc 
-
-const (
-Bladeinit = `local sh = require('sh')
-
--- demo [name] - a short blade demo
-function target.demo(name)
-
-  -- set a default value to name
-  name = name or "please enter your name: blade demo <name>"
-
-  sh.echo("Hi, " .. name .. "!"):print()
-end
-`
-Compgen = `_blade()
+_blade()
 {
   local cur prev output header opts oifs
 
@@ -75,5 +61,3 @@ Compgen = `_blade()
   return 0
 }
 complete -F _blade blade
-`
-)

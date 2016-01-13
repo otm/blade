@@ -84,8 +84,13 @@ blade.flag(target.flags, function(flag)
 		return 1,2,3,4,5,6
 	end)
 
-	flag:string("folder", "", "The folder to release from", function(arg)
+	flag:string("folder", "", "The folder to release from", function(arg, flags, compWords, compCWord)
+		blade.compopt{filedir=true}
 		return sh.glob(arg .. "*")
+	end)
+
+	flag:string("not-folder", "", "An option", function(arg)
+		return "foo", "testdata"
 	end)
 
 	flag:stringArg("name", 1, "Your name", function(arg)

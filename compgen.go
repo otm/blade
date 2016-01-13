@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/otm/blade/luasrc"
 	"github.com/otm/gluaflag"
 	"github.com/yuin/gopher-lua"
 )
@@ -64,7 +65,33 @@ func printFlags() {
 	printOptions(s)
 }
 
+// constants for printing compopts header
+const (
+	HEADER    = "### BEGIN COMPGEN INFO\n"
+	FOOTER    = "### END COMPGEN INFO\n"
+	PREFIX    = "# "
+	SEPARATOR = ": "
+)
+
+func compHeader() string {
+	generateOption := func(key, value string) string {
+		return PREFIX + key + SEPARATOR + value + "\n"
+	}
+
+	header := ""
+	if compopts.filedir {
+		header = header + generateOption("mode", "filedir")
+	}
+
+	if header != "" {
+		header = HEADER + header + FOOTER
+	}
+
+	return header
+}
+
 func printOptions(opts []string) {
+	fmt.Printf("%v", compHeader())
 	fmt.Printf("%v", strings.Join(opts, "\n"))
 }
 
@@ -160,34 +187,5 @@ func compgen() {
 
 // blade -generate-bash-conf | sudo tee /etc/bash_completion.d/blade
 func generateBashConfig() {
-	conf := `_blade()
-{
-    local cur prev opts old_ifs
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-
-    if [[ ${prev} == -f ]]; then
-      if  [[ $(declare -f _filedir) ]]; then
-        _filedir
-      else
-        COMPREPLY=( $(compgen -f -- ${cur}) )
-      fi
-      return 0
-    fi
-
-    flags=$(echo "${COMP_WORDS[@]}")
-    flag=$(expr "${flags}" : '.*\(-f [^ ]* *\)')
-
-    old_ifs=$IFS
-    IFS=$'\n'
-    opts=$(blade $flag -compgen -comp-cwords $COMP_CWORD ${COMP_WORDS[@]})
-    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-    type compopt >&/dev/null && compopt -o filenames 2> /dev/null || compgen -f /non-existing-dir/ > /dev/null
-    IFS=$old_ifs
-    return 0
-}
-complete -F _blade blade
-`
-	fmt.Print(conf)
+	fmt.Print(luasrc.Compgen)
 }

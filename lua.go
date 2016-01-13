@@ -186,3 +186,24 @@ func printStatus(L *lua.LState) int {
 
 	return 0
 }
+
+type compoptsType struct {
+	filedir bool
+}
+
+var compopts = compoptsType{}
+
+// compopt is used for setting bash compleation options
+func compopt(L *lua.LState) int {
+	tbl := L.CheckTable(1)
+	tbl.ForEach(func(k, v lua.LValue) {
+		if key, ok := k.(lua.LString); ok {
+			if string(key) == "filedir" {
+				compopts.filedir = true
+				return
+			}
+		}
+		emitErr("unknown compopt: %v", k)
+	})
+	return 0
+}

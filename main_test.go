@@ -208,14 +208,8 @@ func TestFailFlags(t *testing.T) {
 			flag:string("name", "John Dow", "How to foo")
 		end)
   `
-	expected := ""
-	expectedStderr := strings.Join([]string{
-		"flag provided but not defined: -foo",
-		"Usage of fooer:",
-		"  -name string",
-		"    	How to foo (default \"John Dow\")",
-		"",
-	}, "\n")
+	expected := "flag provided but not defined: -foo"
+	expectedStderr := strings.Join([]string{}, "\n")
 	got, stderr := doString(t, src, "fooer", "-foo", "bar")
 	check(t, expected, got, src)
 	check(t, expectedStderr, stderr, src)

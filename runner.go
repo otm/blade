@@ -15,7 +15,7 @@ import (
 	"github.com/yuin/gopher-lua"
 )
 
-//go:generate go run scripts/include.go
+//go:generate go run tools/include.go
 
 var (
 	// shell contains the current shell used when running shell commands
@@ -199,9 +199,11 @@ func main() {
 
 		err = customTarget(L, cmd, target, flag.Args()[1:])
 		if err != nil {
-			// TODO: Make error message look nicer
-			// emitErr("%v\n\n", err)
-			printSubcommandHelp(target, L)
+			if err == flag.ErrHelp {
+				printSubcommandHelp(target, L)
+				return
+			}
+			fmt.Printf("%v\n", err)
 			return
 		}
 		wait(done)

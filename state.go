@@ -34,6 +34,7 @@ func setupEnv(src string) (L *lua.LState, runner *lua.LTable, cmd *lua.LTable) {
 	blade.RawSetString("shell", L.NewFunction(SetShell))
 	blade.RawSetString("printStatus", L.NewFunction(printStatus))
 	blade.RawSetString("compgen", L.NewFunction(Compgen))
+	blade.RawSetString("compopt", L.NewFunction(compopt))
 	blade.RawSetString("flag", L.NewFunction(NewFlag))
 	blade.RawSetString("help", L.NewFunction(Help))
 	blade.RawSetString("setup", L.NewFunction(func(L *lua.LState) int { return 0 }))
